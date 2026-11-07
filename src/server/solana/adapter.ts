@@ -4,9 +4,15 @@ import {
   getTransferSolInstruction,
   parseTransferSolInstruction
 } from "@solana-program/system";
+import {
+  TOKEN_PROGRAM_ADDRESS,
+  getTransferCheckedInstruction,
+  parseTransferCheckedInstruction
+} from "@solana-program/token";
 import { ActionProposal, DecodedInstruction, InstructionAccount } from "@/domain/actions/proposal";
 
-// Default dummy sender address used for constructing unsigned proposals when none is provided
+// Default dummy sender address used for constructing unsigned proposals when none is provided.
+// This is a valid base58 Devnet address used only for instruction construction/inspection.
 export const DEFAULT_SOURCE_WALLET = "83vSikV2eS2L54R8iH8Gv5vM2y9zH3R5xQv8vT3s8XqZ";
 
 export interface SolanaInstructionResult {
@@ -18,13 +24,21 @@ export interface SolanaInstructionResult {
  * Solana Adapter:
  * Takes an agent's ActionProposal, generates the corresponding Solana instruction structure,
  * and deeply inspects the resulting instruction binary and accounts without trusting the agent's prose.
+ *
+ * Supported:
+ *   - System Program SOL transfers (sol_transfer)
+ *   - SPL Token transferChecked (token_transfer)
+ *
+ * Unsupported:
+ *   - Arbitrary program interactions → returns UNSUPPORTED_INSTRUCTION
+ *   - Unknown action types → returns UNSUPPORTED_INSTRUCTION
  */
 export class SolanaInstructionAdapter {
   /**
    * Constructs and inspects a Solana instruction from an ActionProposal.
    */
   static processProposal(proposal: ActionProposal): SolanaInstructionResult {
-    // 1. If actionType is sol_transfer
+    // ── 1. System Program SOL transfer ───────────────────────────────────────
     if (proposal.actionType === "sol_transfer") {
       const recipientStr = proposal.parameters.recipient;
       const lamportsStr = proposal.parameters.lamports;
@@ -77,10 +91,7 @@ export class SolanaInstructionAdapter {
           }
         };
 
-        return {
-          decoded,
-          rawInstruction: ix
-        };
+        return { decoded, rawInstruction: ix };
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         return {
@@ -94,18 +105,103 @@ export class SolanaInstructionAdapter {
       }
     }
 
-    // 2. If program_interaction or custom program
+    // ── 2. SPL Token transferChecked ──────────────────────────────────────────
+    if (proposal.actionType === "token_transfer") {
+      const destinationStr = proposal.parameters.recipient; // destination token account
+      const tokenAmountStr = proposal.parameters.tokenAmount;
+      const tokenMintStr = proposal.parameters.tokenMint;
+      const sourceStr = proposal.parameters.sourceAccount || proposal.parameters.rawAccounts?.[0];
+      const decimals = proposal.parameters.tokenDecimals;
+      // Authority is typically index 1 in rawAccounts or falls back to the source
+      const authorityStr = proposal.parameters.rawAccounts?.[1] || sourceStr;
+
+      if (!destinationStr || !tokenAmountStr || !tokenMintStr || !sourceStr || decimals === undefined) {
+        return {
+          decoded: {
+            programAddress: TOKEN_PROGRAM_ADDRESS,
+            instructionType: "MALFORMED",
+            accounts: [],
+            decodingError: [
+              `Missing required token transfer parameters:`,
+              `destination=${destinationStr}`,
+              `tokenAmount=${tokenAmountStr}`,
+              `tokenMint=${tokenMintStr}`,
+              `sourceAccount=${sourceStr}`,
+              `tokenDecimals=${decimals}`
+            ].join(" ")
+          }
+        };
+      }
+
+      try {
+        const sourceAddr = address(sourceStr);
+        const mintAddr = address(tokenMintStr);
+        const destAddr = address(destinationStr);
+        const authorityAddr = address(authorityStr || sourceStr);
+        const authoritySigner = createNoopSigner(authorityAddr);
+        const amount = BigInt(tokenAmountStr);
+
+        // Construct official SPL Token transferChecked instruction
+        const ix = getTransferCheckedInstruction({
+          source: sourceAddr,
+          mint: mintAddr,
+          destination: destAddr,
+          authority: authoritySigner,
+          amount,
+          decimals
+        });
+
+        // Parse/verify instruction binary directly using official decoder
+        const parsed = parseTransferCheckedInstruction(ix);
+
+        const accounts: InstructionAccount[] = (ix.accounts || []).map((acc) => ({
+          address: acc.address,
+          role: acc.role === 3 ? "writable_signer" : acc.role === 1 ? "writable" : "readonly"
+        }));
+
+        const decoded: DecodedInstruction = {
+          programAddress: parsed.programAddress,
+          instructionType: "TOKEN_TRANSFER_CHECKED",
+          accounts,
+          recipient: parsed.accounts.destination.address,
+          source: parsed.accounts.source.address,
+          authority: parsed.accounts.authority.address,
+          tokenAmount: parsed.data.amount,
+          tokenMint: parsed.accounts.mint.address,
+          tokenDecimals: parsed.data.decimals,
+          raw: {
+            programAddress: ix.programAddress,
+            accountCount: ix.accounts?.length ?? 0,
+            dataLength: ix.data?.length ?? 0
+          }
+        };
+
+        return { decoded, rawInstruction: ix };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          decoded: {
+            programAddress: TOKEN_PROGRAM_ADDRESS,
+            instructionType: "MALFORMED",
+            accounts: [],
+            decodingError: `Failed to construct/decode SPL Token transferChecked instruction: ${message}`
+          }
+        };
+      }
+    }
+
+    // ── 3. Arbitrary program interaction ─────────────────────────────────────
     if (proposal.actionType === "program_interaction" || proposal.parameters.programId) {
       const programIdStr = proposal.parameters.programId || "unknown";
       try {
         const progAddress = address(programIdStr);
 
-        const accounts: InstructionAccount[] = (proposal.parameters.rawAccounts || []).map((addr) => ({
-          address: addr,
+        const accounts: InstructionAccount[] = (proposal.parameters.rawAccounts || []).map((acc: string) => ({
+          address: acc,
           role: "readonly"
         }));
 
-        // Explicitly return UNSUPPORTED because arbitrary programs cannot be safely verified as safe
+        // Explicitly return UNSUPPORTED because arbitrary programs cannot be safely verified
         const decoded: DecodedInstruction = {
           programAddress: progAddress,
           instructionType: "UNSUPPORTED",
@@ -116,10 +212,7 @@ export class SolanaInstructionAdapter {
 
         return {
           decoded,
-          rawInstruction: {
-            programAddress: progAddress,
-            data: proposal.parameters.data
-          }
+          rawInstruction: { programAddress: progAddress, data: proposal.parameters.data }
         };
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -134,7 +227,7 @@ export class SolanaInstructionAdapter {
       }
     }
 
-    // 3. Unknown or unsupported action type
+    // ── 4. Unknown or unsupported action type ─────────────────────────────────
     return {
       decoded: {
         programAddress: "Unknown",
