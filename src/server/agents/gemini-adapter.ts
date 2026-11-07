@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { ActionProposal, actionProposalSchema } from "@/domain/actions/proposal";
+import { actionProposalSchema } from "@/domain/actions/proposal";
 import { AgentAdapter, AgentInput, AgentExecutionOutput } from "./types";
 
 export class GeminiAgentAdapter implements AgentAdapter {

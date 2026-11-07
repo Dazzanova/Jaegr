@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { TestRunRepository } from "@/server/persistence/repository";
 import { DeterministicDemoAdapter } from "@/server/agents/deterministic-adapter";
 import { ScenarioTestRunner } from "@/server/orchestration/runner";

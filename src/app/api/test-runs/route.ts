@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { SCENARIOS } from "@/domain/scenarios/definitions";
 import { authorizationMandateSchema } from "@/domain/mandates/mandate";
 import { createAgentAdapter } from "@/server/agents/factory";
 import { ScenarioTestRunner } from "@/server/orchestration/runner";
 import { TestRunRepository } from "@/server/persistence/repository";
+import { safeJsonResponse } from "@/lib/utils/json";
 
 const runTestSchema = z.object({
   scenarioId: z.string().optional(),
@@ -33,13 +34,13 @@ export async function GET(req: NextRequest) {
     const runs = await TestRunRepository.listRuns(limit);
     const stats = await TestRunRepository.getSummaryStats();
 
-    return NextResponse.json({
+    return safeJsonResponse({
       runs,
       stats
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return safeJsonResponse({ error: message }, { status: 500 });
   }
 }
 
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
     const parsed = runTestSchema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
+      return safeJsonResponse(
         {
           error: "Invalid request payload",
           details: parsed.error.issues
@@ -65,12 +66,12 @@ export async function POST(req: NextRequest) {
     if (scenarioId) {
       targetScenarios = SCENARIOS.filter((s) => s.id === scenarioId);
       if (targetScenarios.length === 0) {
-        return NextResponse.json({ error: `Scenario '${scenarioId}' not found.` }, { status: 404 });
+        return safeJsonResponse({ error: `Scenario '${scenarioId}' not found.` }, { status: 404 });
       }
     } else if (scenarioIds && scenarioIds.length > 0) {
       targetScenarios = SCENARIOS.filter((s) => scenarioIds.includes(s.id));
       if (targetScenarios.length === 0) {
-        return NextResponse.json({ error: "None of the specified scenarioIds were found." }, { status: 404 });
+        return safeJsonResponse({ error: "None of the specified scenarioIds were found." }, { status: 404 });
       }
     }
 
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
       results.push(result);
     }
 
-    return NextResponse.json({
+    return safeJsonResponse({
       suiteId,
       profileType,
       provider: resolvedProvider,
@@ -118,6 +119,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return safeJsonResponse({ error: message }, { status: 500 });
   }
 }

@@ -1,69 +1,155 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState, useEffect, useCallback } from "react";
+import { Navbar } from "@/components/layout/Navbar";
+import { DashboardView } from "@/features/dashboard/DashboardView";
+import { WorkbenchView } from "@/features/test-runs/WorkbenchView";
+import { ScenariosView } from "@/features/scenarios/ScenariosView";
+import { HistoryView } from "@/features/history/HistoryView";
+import { ScenarioItem } from "@/features/scenarios/ScenarioCard";
+import { StoredTestRun, SummaryStats } from "@/server/persistence/repository";
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<"dashboard" | "workbench" | "scenarios" | "history">("dashboard");
+  const [scenarios, setScenarios] = useState<ScenarioItem[]>([]);
+  const [recentRuns, setRecentRuns] = useState<StoredTestRun[]>([]);
+  const [stats, setStats] = useState<SummaryStats>({
+    totalRuns: 0,
+    totalCompromised: 0,
+    totalResisted: 0,
+    totalBlockedByPolicy: 0,
+    totalPassedByPolicy: 0,
+    distinctScenariosTested: 0
+  });
+  const [geminiAvailable, setGeminiAvailable] = useState<boolean>(false);
+
+  const reloadData = useCallback(async () => {
+    try {
+      const [scenariosRes, profilesRes, runsRes] = await Promise.all([
+        fetch("/api/scenarios"),
+        fetch("/api/profiles"),
+        fetch("/api/test-runs?limit=20")
+      ]);
+
+      if (scenariosRes.ok) {
+        const data = await scenariosRes.json();
+        setScenarios(data.scenarios || []);
+      }
+
+      if (profilesRes.ok) {
+        const data = await profilesRes.json();
+        setGeminiAvailable(Boolean(data.geminiConfigured));
+      }
+
+      if (runsRes.ok) {
+        const data = await runsRes.json();
+        setRecentRuns(data.runs || []);
+        if (data.stats) {
+          setStats(data.stats);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch application data:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    const runFetch = async () => {
+      try {
+        const [scenariosRes, profilesRes, runsRes] = await Promise.all([
+          fetch("/api/scenarios"),
+          fetch("/api/profiles"),
+          fetch("/api/test-runs?limit=20")
+        ]);
+
+        if (ignore) return;
+
+        if (scenariosRes.ok) {
+          const data = await scenariosRes.json();
+          setScenarios(data.scenarios || []);
+        }
+
+        if (profilesRes.ok) {
+          const data = await profilesRes.json();
+          setGeminiAvailable(Boolean(data.geminiConfigured));
+        }
+
+        if (runsRes.ok) {
+          const data = await runsRes.json();
+          setRecentRuns(data.runs || []);
+          if (data.stats) {
+            setStats(data.stats);
+          }
+        }
+      } catch (e) {
+        if (!ignore) console.error("Failed to load initial data:", e);
+      }
+    };
+
+    runFetch();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+    <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans selection:bg-purple-900 selection:text-white">
+      <Navbar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        geminiAvailable={geminiAvailable}
+      />
+
+      <main className="flex-1">
+        {activeTab === "dashboard" && (
+          <DashboardView
+            stats={stats}
+            recentRuns={recentRuns}
+            scenarios={scenarios}
+            onStartRun={() => setActiveTab("workbench")}
+            onNavigateToWorkbench={() => setActiveTab("workbench")}
+            onNavigateToScenarios={() => setActiveTab("scenarios")}
+          />
+        )}
+
+        {activeTab === "workbench" && (
+          <WorkbenchView
+            scenarios={scenarios}
+            geminiAvailable={geminiAvailable}
+            onRunComplete={reloadData}
+          />
+        )}
+
+        {activeTab === "scenarios" && (
+          <ScenariosView
+            scenarios={scenarios}
+            onSelectScenario={() => setActiveTab("workbench")}
+          />
+        )}
+
+        {activeTab === "history" && (
+          <HistoryView
+            runs={recentRuns}
+            onNavigateToWorkbench={() => setActiveTab("workbench")}
+          />
+        )}
       </main>
+
+      <footer className="border-t border-slate-900 bg-slate-950/80 py-6 text-xs text-slate-500 font-mono">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-slate-300">AgentCrashTest</span>
+            <span>•</span>
+            <span>Track: Solana AI</span>
+            <span>•</span>
+            <span>SDK: @solana/kit 8.6.0</span>
+          </div>
+          <div>
+            Built with Next.js App Router, Drizzle SQLite, and Google GenAI. Unsigned instruction proposals only.
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

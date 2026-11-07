@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { TestRunRepository } from "@/server/persistence/repository";
+import { safeJsonResponse } from "@/lib/utils/json";
 
 export async function GET(
   _req: NextRequest,
@@ -10,12 +11,12 @@ export async function GET(
     const run = await TestRunRepository.getRunById(id);
 
     if (!run) {
-      return NextResponse.json({ error: `Test run with ID '${id}' not found.` }, { status: 404 });
+      return safeJsonResponse({ error: `Test run with ID '${id}' not found.` }, { status: 404 });
     }
 
-    return NextResponse.json({ run });
+    return safeJsonResponse({ run });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return safeJsonResponse({ error: message }, { status: 500 });
   }
 }
