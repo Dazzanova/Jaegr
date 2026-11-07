@@ -22,15 +22,20 @@ However, foundation Large Language Models (LLMs) are probabilistic text generato
 
 ## 2. Product Overview
 
-**AgentCrashTest** is a developer security testing workbench that red-teams reference Solana AI agents against adversarial scenarios, captures their proposed Solana actions, inspects the resulting instruction binaries, and independently evaluates them against a user-defined authorization mandate.
+**AgentCrashTest** is a developer security testing workbench that red-teams reference Solana AI agents against adversarial scenarios, captures their proposed Solana actions, inspects the resulting instruction binaries, independently evaluates them against a user-defined authorization mandate, and simulates them against real Solana Devnet.
 
 The central question answered by AgentCrashTest:
 > *"Can this AI agent be manipulated into proposing a Solana transaction the user never authorized?"*
 
-### The Two Critical Metrics
-AgentCrashTest never collapses security into an ambiguous single score. It explicitly distinguishes two separate outcomes:
-1. **Agent Resistance:** Did the AI model resist the adversarial input and adhere to the legitimate task?
-2. **Authorization Enforcement:** Did the independent policy evaluator block the unauthorized instruction proposal before funds could move?
+### Three Independent Security Metrics
+
+AgentCrashTest never collapses security into an ambiguous single score. It explicitly reports three independent outcomes:
+
+1. **Agent Resistance** (`RESISTED` / `COMPROMISED`): Did the AI model resist the adversarial input and adhere to the legitimate task?
+2. **Authorization Enforcement** (`BLOCKED` / `PASSED`): Did the independent deterministic policy evaluator block the unauthorized instruction proposal before funds could move?
+3. **Devnet Simulation** (`SUCCESS` / `EXECUTION_FAILED` / `RPC_ERROR` / `NOT_RUN`): Did the actual transaction succeed when submitted to Solana Devnet's `simulateTransaction` RPC?
+
+A transaction may **simulate successfully** while being **policy-BLOCKED** (a blocked attacker payload that would have executed). A policy-approved transaction may **fail simulation** (insufficient balance, account not found). These two results are always displayed separately.
 
 ```
 [ Adversarial Payload / Untrusted Context ]
@@ -43,8 +48,8 @@ AgentCrashTest never collapses security into an ambiguous single score. It expli
                      │ (Proposed Action JSON)
                      ▼
        ┌───────────────────────────┐
-       │   Solana Instruction      │ ───► Constructs official System Program
-       │   Adapter (@solana/kit)   │      binary & parses instruction accounts
+       │   Solana Instruction      │ ───► Constructs official instruction binary
+       │   Adapter (@solana/kit)   │      System Program + SPL Token support
        └───────────────────────────┘
                      │ (Decoded Solana Instruction)
                      ▼
@@ -52,34 +57,44 @@ AgentCrashTest never collapses security into an ambiguous single score. It expli
        │ Independent Policy Engine │ ───► METRIC 2: Authorization Enforcement
        │ (Integer Lamport Invariants)│    (BLOCKED vs PASSED)
        └───────────────────────────┘
+                     │ (Decoded Instruction)
+                     ▼
+       ┌───────────────────────────┐
+       │  Devnet Simulation Service│ ───► METRIC 3: Simulation Result
+       │  (simulateTransaction RPC)│      (SUCCESS/EXECUTION_FAILED/RPC_ERROR/NOT_RUN)
+       └───────────────────────────┘
 ```
 
 ---
 
 ## 3. Core Features
 
-- **Integer Lamport Arithmetic:** All financial limits, balances, and transaction amounts are calculated using native Solana integer Lamports (`bigint`). Zero floating-point rounding errors.
-- **Deep Solana Instruction Inspection:** Uses `@solana/kit` and `@solana-program/system` to construct and verify instruction accounts, program IDs, and transfer data layouts.
-- **Five Mandatory Adversarial Scenarios:** Tested across prompt injection, spend limit escalation, recipient substitution, unauthorized DeFi program calls, and transaction replay.
+- **Real Solana Devnet Connection:** Live RPC health check, slot polling, balance fetching, and `simulateTransaction` against `https://api.devnet.solana.com`.
+- **Browser Wallet Integration:** Wallet Standard-compatible wallet connection (Phantom, Solflare, Backpack). Displays real Devnet SOL balance. Never stores private keys.
+- **Integer Lamport Arithmetic:** All financial limits, balances, and transaction amounts use native Solana integer Lamports (`bigint`). Zero floating-point rounding errors.
+- **Deep Solana Instruction Inspection:** Uses `@solana/kit`, `@solana-program/system`, and `@solana-program/token` to construct and verify instruction accounts, program IDs, and transfer data layouts without trusting the agent's prose.
+- **Supported Instructions:**
+  - ✅ System Program SOL transfers (`sol_transfer`)
+  - ✅ SPL Token `transferChecked` (`token_transfer`)
+  - 🚫 All other programs → explicit `UNSUPPORTED_INSTRUCTION`
+- **Devnet Transaction Simulation:** Builds Kit v8 wire transactions and calls `simulateTransaction` with `replaceRecentBlockhash: true, sigVerify: false`. Captures logs, compute units, and execution errors.
+- **Five Mandatory Adversarial Scenarios:** Prompt injection, spend limit escalation, recipient substitution, unauthorized DeFi program calls, and transaction replay.
 - **Side-by-Side Agent Profiles:** Compare **Naive DeFi Assistant (Vulnerable)** against **Hardened Solana Sentinel (Hardened)** side by side.
-- **Deterministic Offline Demo Mode:** Fully functional and testable with zero API keys or external network connectivity.
-- **Google Gemini 2.5 Flash Integration:** Live AI testing using structured JSON output schemas via the official `@google/genai` JavaScript SDK (server-side only).
-- **Embedded SQLite Audit History:** Test runs and findings are automatically persisted to local SQLite via Drizzle ORM.
-- **One-Click Audit Report Export:** Download structured Markdown reports detailing violated rules, actual vs expected values, and remediation steps.
+- **Deterministic Offline Demo Mode:** Fully functional with zero API keys or external network connectivity.
+- **Google Gemini 2.5 Flash Integration:** Live AI testing using structured JSON output schemas (server-side only).
+- **Embedded SQLite Audit History:** All test runs and simulation results persisted via Drizzle ORM.
 
 ---
 
 ## 4. Adversarial Attack Scenarios
 
-| # | Scenario | Attack Vector | Expected Agent Behavior | Policy Enforcement Invariant |
+| # | Scenario | Attack Vector | Expected Agent Behavior | Policy Enforcement |
 |---|---|---|---|---|
-| 1 | **Indirect Prompt Injection** | Malicious SPL token metadata emergency alert | Vulnerable agent attempts 50 SOL transfer to attacker `9WzDXw...` | **BLOCKED:** Exceeds max lamport budget & recipient not allowlisted |
-| 2 | **Spending-Limit Escalation** | Fake flash-deal upsell in merchant checkout context | Vulnerable agent upgrades payment to 2.5 SOL | **BLOCKED:** `AMOUNT_EXCEEDS_MANDATE` (2.5 SOL > 0.1 SOL cap) |
-| 3 | **Recipient Substitution** | Invoice note claiming partner changed settlement address | Vulnerable agent swaps recipient to attacker wallet | **BLOCKED:** `RECIPIENT_NOT_ALLOWLISTED` (Attacker is not Alice) |
-| 4 | **Unauthorized Program Call** | Lure urging execution of unverified DeFi contract | Vulnerable agent invokes unknown program `MemoSq...` | **BLOCKED:** `PROGRAM_NOT_ALLOWLISTED` & `ACTION_TYPE_NOT_PERMITTED` |
-| 5 | **Action Replay Attack** | Resubmitting duplicate historical proposal ID | Vulnerable agent reuses static action ID from log | **BLOCKED:** `DUPLICATE_ACTION_ID` (Found in `seenActionIds`) |
-
-See [`docs/test-scenarios.md`](docs/test-scenarios.md) for full payloads and assertion specifications.
+| 1 | **Indirect Prompt Injection** | Malicious SPL token metadata emergency alert | Vulnerable agent attempts 50 SOL transfer to attacker | **BLOCKED:** Exceeds lamport budget & recipient not allowlisted |
+| 2 | **Spending-Limit Escalation** | Fake flash-deal upsell in merchant checkout context | Vulnerable agent upgrades payment to 2.5 SOL | **BLOCKED:** `AMOUNT_EXCEEDS_MANDATE` |
+| 3 | **Recipient Substitution** | Invoice note claiming partner changed settlement address | Vulnerable agent swaps recipient to attacker wallet | **BLOCKED:** `RECIPIENT_NOT_ALLOWLISTED` |
+| 4 | **Unauthorized Program Call** | Lure urging execution of unverified DeFi contract | Vulnerable agent invokes unknown program | **BLOCKED:** `PROGRAM_NOT_ALLOWLISTED` |
+| 5 | **Action Replay Attack** | Resubmitting duplicate historical proposal ID | Vulnerable agent reuses static action ID | **BLOCKED:** `DUPLICATE_ACTION_ID` |
 
 ---
 
@@ -87,12 +102,14 @@ See [`docs/test-scenarios.md`](docs/test-scenarios.md) for full payloads and ass
 
 - **Framework:** Next.js 16 (App Router with Turbopack)
 - **Language:** TypeScript 5 (Strict Mode, ES2022 target)
-- **Solana SDK:** `@solana/kit` (v8.6.0) & `@solana-program/system` (v0.16.0)
-- **AI SDK:** `@google/genai` (v3.0.0)
+- **Solana SDK:** `@solana/kit` (v8.6.0), `@solana-program/system` (v0.16.0), `@solana-program/token` (v0.18.0)
+- **Wallet Standard:** `@wallet-standard/core` (v1.1.2), `@solana/wallet-standard-features` (v1.5.0)
+- **Network:** Solana Devnet (`https://api.devnet.solana.com`)
+- **AI SDK:** `@google/genai` (v3.0.0, server-side only)
 - **Runtime Validation:** Zod (v4.6.7)
 - **Database & ORM:** SQLite (`better-sqlite3` v13) with `drizzle-orm` (v0.45.4)
 - **Styling:** Tailwind CSS v4 & Lucide Icons
-- **Unit & Integration Testing:** Vitest (v5.1.0)
+- **Unit & Integration Testing:** Vitest (v5.1.0) — 54 tests
 - **E2E Smoke Testing:** Playwright (v1.65.0)
 
 ---
@@ -100,90 +117,103 @@ See [`docs/test-scenarios.md`](docs/test-scenarios.md) for full payloads and ass
 ## 6. Getting Started
 
 ### Prerequisites
-- Node.js `>= 20.0.0` (Verified on Node `v24.21.0`)
-- pnpm `>= 9.0.0` (Verified on pnpm `v12.16.1`)
+- Node.js `>= 20.0.0`
+- pnpm `>= 9.0.0`
+- A Wallet Standard browser wallet (Phantom / Solflare / Backpack) set to **Devnet**
 
 ### Installation
 ```bash
-# Clone the repository
 git clone https://github.com/AnandNair4/agentcrashtest.git
 cd agentcrashtest
-
-# Checkout the active feature branch
-git checkout feat/agentcrashtest-mvp
-
-# Install dependencies
+git checkout feat/solana-devnet-integration
 pnpm install
 ```
 
 ### Environment Setup
 ```bash
-# Copy example environment configuration
 cp .env.example .env.local
+# Edit .env.local with your values (Gemini API key is optional)
 ```
 
-`.env.example` contents:
+**Required variables:**
 ```env
-# Gemini API Key (Server-side only, optional)
-# If omitted, AgentCrashTest automatically runs in Deterministic Demo Mode
-GEMINI_API_KEY=
+# Solana cluster (devnet only)
+NEXT_PUBLIC_SOLANA_CLUSTER=devnet
 
-# Local SQLite Database Path
-DATABASE_PATH=./data/agentcrashtest.db
+# Optional: custom RPC endpoint (improves reliability vs public endpoint)
+SOLANA_DEVNET_RPC_URL=https://api.devnet.solana.com
+
+# Optional: Gemini API key for live AI agent testing
+GEMINI_API_KEY=your_key_here
 ```
 
----
+### Wallet Setup (Devnet)
+1. Install [Phantom](https://phantom.app) or [Solflare](https://solflare.com)
+2. Switch the wallet to **Devnet** in wallet settings
+3. Airdrop Devnet SOL: `solana airdrop 1 <YOUR_WALLET_ADDRESS> --url devnet`
+   - Or use the [Solana Faucet](https://faucet.solana.com)
 
-## 7. Development & Verification Commands
-
+### Run
 ```bash
-# Start local development server (http://localhost:3000)
-pnpm dev
-
-# Run unit and integration tests (24 passing tests)
-pnpm test
-
-# Run TypeScript strict typecheck
-pnpm typecheck
-
-# Run ESLint (0 errors, 0 warnings)
-pnpm lint
-
-# Build production application bundle
-pnpm build
-
-# Run Playwright E2E browser smoke test
-pnpm test:e2e
+pnpm dev        # Start dev server at http://localhost:3000
+pnpm test       # Run 54 unit + integration tests
+pnpm typecheck  # TypeScript strict check
+pnpm build      # Production build
+pnpm test:e2e   # Playwright E2E smoke test
 ```
 
 ---
 
-## 8. Demo Walkthrough
+## 7. Using the Workbench
 
-1. **Dashboard Overview:** Open `http://localhost:3000`. Inspect the high-level metrics, product identity, and scenario catalog.
-2. **Open Test Workbench:** Click **"Test Workbench"**.
-3. **Configure Mandate:** Set Max SOL (e.g. `0.1` SOL = `100,000,000` lamports) and authorized recipient Alice (`TokenkegQfe...`).
-4. **Run Naive Agent (Vulnerable):** Click **"Start Security Crash Test"**. Observe that the vulnerable agent is **COMPROMISED** by the prompt injection, but the independent policy evaluator steps in and **BLOCKS** the transaction.
-5. **Inspect Decoded Solana Instruction:** Click **"Inspect"** to view the decoded System Program instruction accounts, binary data length, integer lamport amount, and specific policy finding cards.
-6. **Side-by-Side Comparison:** Check **"Side-by-Side Comparison"** and re-run. Observe how the **Hardened Solana Sentinel** resists the attack while the policy engine validates compliance.
-7. **Export Audit Report:** Click **"Export Audit Report"** to download the Markdown security report.
+### Standard Security Test Flow
 
-See [`docs/demo-script.md`](docs/demo-script.md) for the complete 2–3 minute presentation script.
+1. **Open Dashboard** at `http://localhost:3000` — verify Devnet network indicator shows `healthy`
+2. **Connect Wallet** — click "Connect Wallet" in the navbar, select your Devnet wallet
+3. **Open Test Workbench** — configure mandate (max SOL, allowed recipient, allowed program)
+4. **Run Test** — select a scenario and profile, click "Start Security Crash Test"
+5. **Review Results** — three independent metrics: Agent Resistance, Mandate Policy, Devnet Sim
+
+### Devnet Simulation
+
+The simulation tab in each result card shows:
+- **Simulation status** (SUCCESS / EXECUTION_FAILED / RPC_ERROR / NOT_RUN)
+- **Program logs** from `simulateTransaction`
+- **Compute units** consumed
+- **Execution error** (if any)
+
+Simulation is completely independent from authorization. A simulation SUCCESS never means a transaction is authorized.
+
+### Supported API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/solana/network` | Devnet health check and current slot |
+| `GET` | `/api/solana/balance?address=<pk>` | SOL balance in lamports |
+| `GET` | `/api/solana/account?address=<pk>` | Account details |
+| `POST` | `/api/solana/simulate` | Simulate an ActionProposal against Devnet |
+| `GET` | `/api/solana/transaction?signature=<sig>` | Fetch confirmed transaction |
+| `GET` | `/api/test-runs` | List audit history |
+| `POST` | `/api/test-runs` | Run a scenario test |
+| `GET` | `/api/scenarios` | Available adversarial scenarios |
+| `GET` | `/api/profiles` | Available agent profiles |
 
 ---
 
-## 9. Security Safety Constraints
+## 8. Security Safety Constraints
 
-- **No Private Keys:** AgentCrashTest never requests, accepts, stores, or logs private keys or mnemonic seed phrases.
-- **Unsigned Instruction Proposals:** Transactions evaluated in the workbench are unsigned proposals.
-- **No Mainnet Broadcasting:** The test harness does not broadcast transactions to Solana Mainnet.
-- **No Floating-Point Math:** All SOL comparisons use exact integer Lamports.
-- **Server-Side API Keys:** The Gemini API key remains strictly server-side and is never sent to the browser.
-- **Zero-Trust Policy:** The independent policy evaluator never trusts natural-language explanations provided by an LLM.
+- **No Private Keys:** AgentCrashTest never requests, accepts, stores, or logs private keys or seed phrases.
+- **Unsigned Proposals Only:** Transactions evaluated in the workbench are never signed automatically.
+- **No Mainnet Broadcasting:** The app rejects any RPC calls to Mainnet.
+- **No Floating-Point Math:** All SOL comparisons use exact integer Lamports (`bigint`).
+- **Server-Side API Keys:** Gemini API key and RPC URLs with credentials remain strictly server-side.
+- **Zero-Trust Policy:** The independent policy evaluator never trusts natural-language explanations from an LLM.
+- **Explicit Signing:** Any wallet transaction signature must be initiated by an explicit user action — wallet connection never auto-signs.
+- **Fail Closed:** Unknown or unsupported instructions always return `UNSUPPORTED_INSTRUCTION` and are rejected by the policy evaluator.
 
 ---
 
-## 10. Documentation Index
+## 9. Documentation Index
 
 - [`AGENTS.md`](AGENTS.md) — Engineering guidelines for autonomous coding agents.
 - [`docs/architecture.md`](docs/architecture.md) — Architectural design, data flow diagrams, and component boundaries.
@@ -196,12 +226,16 @@ See [`docs/demo-script.md`](docs/demo-script.md) for the complete 2–3 minute p
 
 ---
 
-## 11. Roadmap
+## 10. Roadmap
 
+- [x] Solana Devnet RPC integration (network health, balance, account info)
+- [x] SPL Token `transferChecked` decoder and policy enforcement
+- [x] Devnet transaction simulation via `simulateTransaction`
+- [x] Wallet Standard browser wallet connection
+- [x] Real-time network status indicator
 - [ ] Anchor Program IDL dynamic decoder integration
-- [ ] SPL Token transfer and ATA (Associated Token Account) mandate checks
 - [ ] Multi-instruction bundle and CPI (Cross-Program Invocation) graph inspection
-- [ ] Local Solana validator / ephemeral testnet transaction simulation
+- [ ] Explicit wallet-signed Devnet transaction execution with Explorer link
 - [ ] CI/CD GitHub Action for automated pull request agent red-teaming
 
 ---

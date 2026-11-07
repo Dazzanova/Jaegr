@@ -138,3 +138,79 @@ Derived purely from the Solana Kit instruction binary:
 | **better-sqlite3 & Drizzle ORM** | Persistence | Zero-config embedded local database; synchronous, ACID-compliant, WAL-mode persistence |
 | **Vitest (5.1.0)** | Unit & Integration Testing | Fast ESM-native runner with zero external mocking overhead |
 | **Playwright (1.65.0)** | E2E Testing | Browser smoke testing verifying dashboard and workbench interactivity |
+| **@solana-program/token (0.18.0)** | SPL Token client | Codama-generated `transferChecked` instruction builder and decoder |
+| **@wallet-standard/core (1.1.2)** | Wallet discovery | Wallet Standard protocol for browser-side wallet detection and connection |
+| **@solana/wallet-standard-features (1.5.0)** | Wallet features | Solana-specific wallet capability interfaces |
+
+---
+
+## 6. Devnet Integration Architecture
+
+### Directory additions
+
+```
+src/
+├── app/api/solana/
+│   ├── account/route.ts        # GET account info
+│   ├── balance/route.ts        # GET lamport balance
+│   ├── network/route.ts        # GET Devnet health & slot
+│   ├── simulate/route.ts       # POST instruction simulation
+│   └── transaction/route.ts    # GET transaction by signature
+├── lib/wallet/
+│   └── WalletContext.tsx       # Wallet Standard provider + useWallet hook
+├── components/ui/
+│   ├── NetworkStatusBadge.tsx  # Live Devnet health indicator
+│   └── WalletButton.tsx        # Connect/disconnect + balance display
+└── server/solana/
+    ├── adapter.ts              # Extended: sol_transfer + token_transfer
+    ├── client.ts               # SolanaClient: RPC wrapper (server-only)
+    ├── config.ts               # Network config from env vars
+    ├── simulation/
+    │   └── service.ts          # SimulationService.simulate()
+    └── transactions/
+        └── builder.ts          # buildTransactionForSimulation()
+```
+
+### Simulation Flow
+
+```
+ScenarioTestRunner.runScenario()
+  │
+  ├── SolanaInstructionAdapter.processProposal()  ← Metric 2 input
+  │     Builds instruction via official SDK, parses binary
+  │
+  ├── evaluateTransactionPolicy()                 ← Metric 2 (independent)
+  │     Deterministic integer lamport invariants
+  │
+  └── SimulationService.simulate()                ← Metric 3 (independent)
+        │
+        ├── Guard: MALFORMED/UNSUPPORTED → NOT_RUN immediately
+        ├── SolanaClient.getLatestBlockhash()     ← Devnet RPC
+        ├── buildTransactionForSimulation()       ← Kit v8 pipe() pattern
+        │     createTransactionMessage({ version: 0 })
+        │     setTransactionMessageFeePayer()
+        │     setTransactionMessageLifetimeUsingBlockhash()
+        │     appendTransactionMessageInstruction()
+        │     compileTransaction() → getBase64EncodedWireTransaction()
+        └── SolanaClient.simulateWireTransaction()  ← Devnet RPC
+              replaceRecentBlockhash: true
+              sigVerify: false
+```
+
+### Key Invariants
+
+1. **Simulation is NOT security.** A simulation SUCCESS does not authorize a transaction.
+2. **Simulation is NOT required.** `skipSimulation: true` makes all tests deterministic for CI.
+3. **Simulation fails closed.** RPC errors → `RPC_ERROR`, not falsely reported as `SUCCESS`.
+4. **Wallet connection is NOT signing.** Connecting a wallet does not authorize any transaction.
+5. **No Mainnet exposure.** The `SolanaNetworkConfig.cluster` is validated before any RPC call.
+
+### Wallet Architecture
+
+Wallet integration is entirely client-side using the [Wallet Standard](https://github.com/wallet-standard/wallet-standard):
+
+- `WalletProvider` (React context) discovers wallets via `getWallets()` from `@wallet-standard/core`
+- `useWallet()` hook exposes: `wallets`, `publicKey`, `connect()`, `disconnect()`
+- Balance is fetched from `/api/solana/balance?address=<publicKey>` (server-side RPC call)
+- No private keys, seed phrases, or signing keys ever touch the application
+- RPC credentials stay server-side; `NEXT_PUBLIC_` vars are safe to expose (public endpoints only)
