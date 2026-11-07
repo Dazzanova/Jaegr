@@ -1,4 +1,4 @@
-import { address, lamports } from "@solana/kit";
+import { address, createNoopSigner, lamports } from "@solana/kit";
 import {
   SYSTEM_PROGRAM_ADDRESS,
   getTransferSolInstruction,
@@ -46,9 +46,11 @@ export class SolanaInstructionAdapter {
         const amountBigInt = BigInt(lamportsStr);
         const transferAmount = lamports(amountBigInt);
 
+        const sourceSigner = createNoopSigner(sourceAddress);
+
         // Construct official System Program transfer instruction
         const ix = getTransferSolInstruction({
-          source: { address: sourceAddress, role: 3 }, // writable signer
+          source: sourceSigner,
           destination: destAddress,
           amount: transferAmount
         });
