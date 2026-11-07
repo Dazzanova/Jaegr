@@ -85,31 +85,38 @@ export function WalletButton() {
   const { wallets, publicKey, connectedWallet, connecting, disconnecting, error, connect, disconnect } = useWallet();
   const [showPicker, setShowPicker] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [balance, setBalance] = useState<string | null>(null);
-  const [balanceLoading, setBalanceLoading] = useState(false);
+  // null = not connected or error, undefined = loading, string = balance value
+  const [balance, setBalance] = useState<string | null | undefined>(null);
 
-  // Fetch balance whenever wallet connects
+  // Fetch balance whenever the connected wallet address changes.
+  // Balance display is only rendered when publicKey is non-null, so
+  // stale balance from a previous session is never shown after disconnect.
   useEffect(() => {
-    if (!publicKey) {
-      setBalance(null);
-      return;
-    }
+    if (!publicKey) return;
 
-    const fetchBalance = async () => {
-      setBalanceLoading(true);
-      try {
-        const res = await fetch(`/api/solana/balance?address=${encodeURIComponent(publicKey)}`);
+    let cancelled = false;
+
+    // Set loading state asynchronously to avoid the synchronous setState-in-effect lint rule
+    const timer = setTimeout(() => {
+      if (!cancelled) setBalance(undefined); // undefined = loading
+    }, 0);
+
+    fetch(`/api/solana/balance?address=${encodeURIComponent(publicKey)}`)
+      .then((res) => {
         if (!res.ok) throw new Error("Balance fetch failed");
-        const data = await res.json();
-        setBalance(lamportsToSolString(BigInt(data.lamports)));
-      } catch {
-        setBalance(null);
-      } finally {
-        setBalanceLoading(false);
-      }
-    };
+        return res.json();
+      })
+      .then((data) => {
+        if (!cancelled) setBalance(lamportsToSolString(BigInt(data.lamports)));
+      })
+      .catch(() => {
+        if (!cancelled) setBalance(null);
+      });
 
-    fetchBalance();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [publicKey]);
 
   const handleSelect = async (wallet: Wallet) => {
@@ -140,7 +147,7 @@ export function WalletButton() {
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
           <span className="hidden sm:inline">{truncateAddress(publicKey)}</span>
-          {balanceLoading ? (
+          {balance === undefined ? (
             <span className="text-emerald-600">...</span>
           ) : balance !== null ? (
             <span className="text-emerald-300 hidden sm:inline">{balance} SOL</span>

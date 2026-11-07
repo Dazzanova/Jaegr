@@ -1,7 +1,6 @@
 import {
   createSolanaRpc,
   address,
-  Address,
   type Blockhash,
   type Base64EncodedWireTransaction
 } from "@solana/kit";
