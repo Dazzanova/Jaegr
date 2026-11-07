@@ -8,7 +8,8 @@ import {
   XCircle,
   ChevronDown,
   ChevronUp,
-  Clock
+  Clock,
+  Activity
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { StoredTestRun } from "@/server/persistence/repository";
@@ -21,7 +22,7 @@ interface ResultCardProps {
 
 export function ResultCard({ run, defaultExpanded = false }: ResultCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const [activeTab, setActiveTab] = useState<"findings" | "instruction" | "proposal" | "timeline" | "remediation">("findings");
+  const [activeTab, setActiveTab] = useState<"findings" | "instruction" | "simulation" | "proposal" | "timeline" | "remediation">("findings");
 
   const isResisted = run.agentResistanceVerdict === "RESISTED";
   const isBlocked = run.policyEnforcementVerdict === "BLOCKED";
@@ -99,6 +100,33 @@ export function ResultCard({ run, defaultExpanded = false }: ResultCardProps) {
               )}
             </div>
 
+            {/* Metric 3: Devnet Simulation (independent) */}
+            {run.simulationResult && (
+              <div className="bg-slate-950/80 border border-slate-800 rounded-lg px-3.5 py-2 flex items-center gap-2.5">
+                <div className="text-right">
+                  <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-medium">
+                    Devnet Sim
+                  </span>
+                  <span
+                    className={`text-xs font-bold font-mono ${
+                      run.simulationResult.status === "SUCCESS" ? "text-emerald-400" :
+                      run.simulationResult.status === "NOT_RUN" ? "text-slate-400" :
+                      run.simulationResult.status === "EXECUTION_FAILED" ? "text-amber-400" :
+                      "text-rose-400"
+                    }`}
+                  >
+                    {run.simulationResult.status}
+                  </span>
+                </div>
+                <Activity className={`w-5 h-5 ${
+                  run.simulationResult.status === "SUCCESS" ? "text-emerald-400" :
+                  run.simulationResult.status === "NOT_RUN" ? "text-slate-500" :
+                  run.simulationResult.status === "EXECUTION_FAILED" ? "text-amber-400" :
+                  "text-rose-400"
+                }`} />
+              </div>
+            )}
+
             <button
               onClick={() => setExpanded(!expanded)}
               className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors"
@@ -171,6 +199,16 @@ export function ResultCard({ run, defaultExpanded = false }: ResultCardProps) {
               Raw Agent Proposal
             </button>
             <button
+              onClick={() => setActiveTab("simulation")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                activeTab === "simulation"
+                  ? "bg-purple-950 text-purple-300 border border-purple-800/60"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Simulation
+            </button>
+            <button
               onClick={() => setActiveTab("timeline")}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 activeTab === "timeline"
@@ -178,7 +216,7 @@ export function ResultCard({ run, defaultExpanded = false }: ResultCardProps) {
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              Execution Timeline ({run.timeline.length})
+              Timeline ({run.timeline.length})
             </button>
             <button
               onClick={() => setActiveTab("remediation")}
@@ -285,7 +323,80 @@ export function ResultCard({ run, defaultExpanded = false }: ResultCardProps) {
             </div>
           )}
 
-          {/* Tab 3: Raw Agent Proposal */}
+          {/* Tab 3: Devnet Simulation */}
+          {activeTab === "simulation" && (
+            <div className="space-y-3">
+              {run.simulationResult ? (
+                <>
+                  <div className={`p-4 rounded-lg border text-xs font-mono ${
+                    run.simulationResult.status === "SUCCESS"
+                      ? "bg-emerald-950/20 border-emerald-900/40"
+                      : run.simulationResult.status === "EXECUTION_FAILED"
+                      ? "bg-amber-950/20 border-amber-900/40"
+                      : run.simulationResult.status === "NOT_RUN"
+                      ? "bg-slate-900 border-slate-800"
+                      : "bg-rose-950/20 border-rose-900/40"
+                  }`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className={`font-bold text-sm ${
+                        run.simulationResult.status === "SUCCESS" ? "text-emerald-400" :
+                        run.simulationResult.status === "EXECUTION_FAILED" ? "text-amber-400" :
+                        run.simulationResult.status === "NOT_RUN" ? "text-slate-400" :
+                        "text-rose-400"
+                      }`}>
+                        Simulation: {run.simulationResult.status}
+                      </span>
+                      <span className="text-slate-500">{run.simulationResult.durationMs}ms</span>
+                    </div>
+
+                    {run.simulationResult.errorMessage && (
+                      <p className="text-slate-300 mb-3">{run.simulationResult.errorMessage}</p>
+                    )}
+
+                    {run.simulationResult.unitsConsumed && (
+                      <div className="mb-2">
+                        <span className="text-slate-500">Compute units consumed: </span>
+                        <span className="text-sky-400">{run.simulationResult.unitsConsumed}</span>
+                      </div>
+                    )}
+
+                    {run.simulationResult.err != null && (
+                      <div className="mb-2">
+                        <span className="text-slate-500 block mb-1">Execution error:</span>
+                        <code className="text-rose-400 break-all">{JSON.stringify(run.simulationResult.err)}</code>
+                      </div>
+                    )}
+
+                    {run.simulationResult.logs && run.simulationResult.logs.length > 0 && (
+                      <div>
+                        <span className="text-slate-500 block mb-1">Program logs ({run.simulationResult.logs.length}):</span>
+                        <div className="bg-slate-950 rounded p-2 space-y-0.5 max-h-40 overflow-y-auto">
+                          {run.simulationResult.logs.map((log, i) => (
+                            <div key={i} className="text-[11px] text-slate-300">{log}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 text-xs text-slate-400">
+                    <p>
+                      <span className="font-semibold text-slate-300">Important: </span>
+                      Simulation and authorization are independent results. A simulation SUCCESS does not mean
+                      the transaction is authorized. A policy BLOCKED transaction is never submitted — even if
+                      simulation would succeed.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 text-xs">
+                  No simulation data available for this run.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab 4: Raw Agent Proposal */}
           {activeTab === "proposal" && (
             <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs overflow-x-auto">
               <pre className="text-slate-300">{JSON.stringify(run.proposal, null, 2)}</pre>

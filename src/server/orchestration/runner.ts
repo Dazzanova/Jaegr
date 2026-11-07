@@ -4,6 +4,7 @@ import { Finding, evaluateTransactionPolicy } from "@/domain/evaluation/evaluato
 import { SCENARIOS, ScenarioDefinition } from "@/domain/scenarios/definitions";
 import { AgentAdapter, AgentProfileType } from "../agents/types";
 import { SolanaInstructionAdapter } from "../solana/adapter";
+import { SimulationService, SimulationResult } from "../solana/simulation/service";
 
 export interface TimelineEvent {
   step: string;
@@ -29,6 +30,9 @@ export interface ScenarioTestResult {
   policyEnforcementVerdict: "BLOCKED" | "PASSED";
   policyEnforcementExplanation: string;
 
+  // Simulation result — always independent from authorization
+  simulationResult: SimulationResult;
+
   // Artifacts
   proposal: ActionProposal;
   decodedInstruction: DecodedInstruction;
@@ -49,6 +53,10 @@ export class ScenarioTestRunner {
     agentAdapter: AgentAdapter;
     profileType: AgentProfileType;
     customUntrustedContext?: string;
+    /** Explicitly skip simulation (e.g. in CI or when RPC is unavailable) */
+    skipSimulation?: boolean;
+    /** Optional connected wallet address to use as fee payer for simulation */
+    feePayerAddress?: string;
   }): Promise<ScenarioTestResult> {
     const startedAt = new Date().toISOString();
     const startTime = performance.now();
@@ -158,6 +166,42 @@ export class ScenarioTestRunner {
       metadata: { findingsCount: evaluationReport.findings.length }
     });
 
+    // 7. Devnet Simulation (independent of authorization)
+    timeline.push({
+      step: "SIMULATION_START",
+      timestamp: new Date().toISOString(),
+      description: "Submitting instruction to Devnet simulation...",
+      status: "info"
+    });
+
+    let simulationResult: SimulationResult;
+
+    if (options.skipSimulation) {
+      simulationResult = {
+        status: "NOT_RUN",
+        timestamp: new Date().toISOString(),
+        durationMs: 0,
+        errorMessage: "Simulation skipped by caller (skipSimulation=true)"
+      };
+    } else {
+      simulationResult = await SimulationService.simulate(decoded, options.feePayerAddress);
+    }
+
+    timeline.push({
+      step: "SIMULATION_RESULT",
+      timestamp: new Date().toISOString(),
+      description: `Devnet simulation: ${simulationResult.status}. ${simulationResult.errorMessage || (simulationResult.unitsConsumed ? `Compute units: ${simulationResult.unitsConsumed}` : "")}`,
+      status:
+        simulationResult.status === "SUCCESS" ? "success" :
+        simulationResult.status === "NOT_RUN" ? "info" :
+        "error",
+      metadata: {
+        simulationStatus: simulationResult.status,
+        unitsConsumed: simulationResult.unitsConsumed,
+        logCount: simulationResult.logs?.length ?? 0
+      }
+    });
+
     const completedAt = new Date().toISOString();
     const durationMs = Math.round(performance.now() - startTime);
 
@@ -174,6 +218,7 @@ export class ScenarioTestRunner {
       agentResistanceExplanation: resistanceAssertion.explanation,
       policyEnforcementVerdict,
       policyEnforcementExplanation: policyAssertion.explanation,
+      simulationResult,
       proposal: agentResult.proposal,
       decodedInstruction: decoded,
       findings: evaluationReport.findings,
@@ -193,6 +238,8 @@ export class ScenarioTestRunner {
     mandate: AuthorizationMandate;
     agentAdapter: AgentAdapter;
     profileType: AgentProfileType;
+    skipSimulation?: boolean;
+    feePayerAddress?: string;
   }): Promise<ScenarioTestResult[]> {
     const selectedScenarios = options.scenarioIds?.length
       ? SCENARIOS.filter((s) => options.scenarioIds?.includes(s.id))
@@ -204,7 +251,9 @@ export class ScenarioTestRunner {
         scenario,
         mandate: options.mandate,
         agentAdapter: options.agentAdapter,
-        profileType: options.profileType
+        profileType: options.profileType,
+        skipSimulation: options.skipSimulation,
+        feePayerAddress: options.feePayerAddress
       });
       results.push(result);
     }

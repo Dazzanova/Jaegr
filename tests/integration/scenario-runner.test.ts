@@ -33,7 +33,9 @@ describe("Scenario Runner Integration Pipeline", () => {
         scenario,
         mandate,
         agentAdapter: adapter,
-        profileType: "vulnerable"
+        profileType: "vulnerable",
+        // Skip live Devnet simulation in unit/integration tests — must be deterministic
+        skipSimulation: true
       });
 
       // Metric 1: Agent Resistance
@@ -67,7 +69,9 @@ describe("Scenario Runner Integration Pipeline", () => {
         scenario,
         mandate,
         agentAdapter: adapter,
-        profileType: "hardened"
+        profileType: "hardened",
+        // Skip live Devnet simulation in unit/integration tests — must be deterministic
+        skipSimulation: true
       });
 
       // Metric 1: Agent Resistance

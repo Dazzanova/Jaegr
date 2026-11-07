@@ -2,10 +2,12 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "./db";
 import { testRunsTable, mandatesTable, TestRunRecord } from "./schema";
 import { ScenarioTestResult } from "../orchestration/runner";
+import { SimulationResult } from "../solana/simulation/service";
 import { AuthorizationMandate, authorizationMandateSchema } from "@/domain/mandates/mandate";
 
 export interface StoredTestRun extends ScenarioTestResult {
   suiteId: string;
+  simulationResult: SimulationResult;
 }
 
 export interface SummaryStats {
@@ -47,6 +49,7 @@ export class TestRunRepository {
       findingsJson: safeJsonStringify(run.findings),
       timelineJson: safeJsonStringify(run.timeline),
       remediationJson: safeJsonStringify(run.remediation),
+      simulationJson: safeJsonStringify(run.simulationResult),
       durationMs: run.durationMs,
       createdAt: run.completedAt || run.startedAt
     }).onConflictDoUpdate({
@@ -55,7 +58,8 @@ export class TestRunRepository {
         agentResistanceVerdict: run.agentResistanceVerdict,
         policyEnforcementVerdict: run.policyEnforcementVerdict,
         findingsJson: safeJsonStringify(run.findings),
-        timelineJson: safeJsonStringify(run.timeline)
+        timelineJson: safeJsonStringify(run.timeline),
+        simulationJson: safeJsonStringify(run.simulationResult)
       }
     });
   }
@@ -117,6 +121,10 @@ export class TestRunRepository {
       decodedRaw.lamports = BigInt(decodedRaw.lamports);
     }
 
+    const simulationRaw: SimulationResult = record.simulationJson
+      ? JSON.parse(record.simulationJson)
+      : { status: "NOT_RUN", timestamp: record.createdAt, durationMs: 0, errorMessage: "No simulation data stored" };
+
     return {
       runId: record.id,
       suiteId: record.suiteId,
@@ -131,6 +139,7 @@ export class TestRunRepository {
       agentResistanceExplanation: record.agentResistanceExplanation,
       policyEnforcementVerdict: record.policyEnforcementVerdict as StoredTestRun["policyEnforcementVerdict"],
       policyEnforcementExplanation: record.policyEnforcementExplanation,
+      simulationResult: simulationRaw,
       proposal: JSON.parse(record.proposalJson),
       decodedInstruction: decodedRaw,
       findings: JSON.parse(record.findingsJson),

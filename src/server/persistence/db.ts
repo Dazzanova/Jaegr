@@ -42,7 +42,8 @@ export function getSqliteDatabase() {
       timeline_json TEXT NOT NULL,
       remediation_json TEXT NOT NULL,
       duration_ms INTEGER NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      simulation_json TEXT
     );
 
     CREATE TABLE IF NOT EXISTS mandates (
@@ -58,6 +59,15 @@ export function getSqliteDatabase() {
       updated_at TEXT NOT NULL
     );
   `);
+
+  // Safe schema migration: add simulation_json if it doesn't exist yet.
+  // SQLite does not support IF NOT EXISTS on ALTER TABLE ADD COLUMN,
+  // so we catch the error silently.
+  try {
+    sqliteInstance.exec(`ALTER TABLE test_runs ADD COLUMN simulation_json TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
 
   return sqliteInstance;
 }

@@ -25,7 +25,9 @@ export const testRunsTable = sqliteTable("test_runs", {
   remediationJson: text("remediation_json").notNull(),
 
   durationMs: integer("duration_ms").notNull(),
-  createdAt: text("created_at").notNull()
+  createdAt: text("created_at").notNull(),
+  // Nullable: simulation only runs when Devnet RPC is configured and instruction is supported
+  simulationJson: text("simulation_json")
 });
 
 export const mandatesTable = sqliteTable("mandates", {

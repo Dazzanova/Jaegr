@@ -24,7 +24,9 @@ describe("Persistence & Repository Layer", () => {
       scenario,
       mandate,
       agentAdapter: adapter,
-      profileType: "vulnerable"
+      profileType: "vulnerable",
+      // Skip live Devnet simulation in unit/integration tests — must be deterministic
+      skipSimulation: true
     });
 
     await TestRunRepository.saveRun(result, "SUITE-TEST-001");

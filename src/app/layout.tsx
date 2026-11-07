@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { WalletProvider } from "@/lib/wallet/WalletContext";
 
 export const metadata: Metadata = {
   title: "AgentCrashTest — Red-team your Solana AI agent before it touches funds",
@@ -14,7 +15,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="antialiased bg-[#090d16] text-slate-100 min-h-screen">
-        {children}
+        <WalletProvider>
+          {children}
+        </WalletProvider>
       </body>
     </html>
   );

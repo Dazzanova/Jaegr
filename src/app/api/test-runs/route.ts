@@ -24,7 +24,9 @@ const runTestSchema = z.object({
       seenActionIds: z.array(z.string()).default(["ACT-REPLAY-TX-0099"])
     })
     .optional(),
-  customUntrustedContext: z.string().optional()
+  customUntrustedContext: z.string().optional(),
+  /** Optional connected wallet address used as fee payer for Devnet simulation */
+  feePayerAddress: z.string().optional()
 });
 
 export async function GET(req: NextRequest) {
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { scenarioId, scenarioIds, profileType, provider, mandate: customMandate, customUntrustedContext } = parsed.data;
+    const { scenarioId, scenarioIds, profileType, provider, mandate: customMandate, customUntrustedContext, feePayerAddress } = parsed.data;
 
     // Determine target scenarios
     let targetScenarios = SCENARIOS;
@@ -101,7 +103,9 @@ export async function POST(req: NextRequest) {
         mandate,
         agentAdapter: adapter,
         profileType,
-        customUntrustedContext
+        customUntrustedContext,
+        feePayerAddress
+        // Note: simulation runs by default; set skipSimulation: true only in test environments
       });
 
       // Persist run
