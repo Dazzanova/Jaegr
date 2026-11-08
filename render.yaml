@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: jaegr
+    runtime: node
+    plan: starter # a persistent disk requires a paid instance type
+    region: oregon
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /api/scenarios
+    envVars:
+      - key: NODE_VERSION
+        value: 22.11.0
+      - key: NEXT_PUBLIC_SOLANA_CLUSTER
+        value: devnet
+      - key: SOLANA_DEVNET_RPC_URL
+        value: https://api.devnet.solana.com
+      # SQLite lives on the mounted disk so runs, findings and execution
+      # evidence survive restarts and deploys.
+      - key: DATABASE_PATH
+        value: /data/jaegr.db
+      # Set these in the Render dashboard; never commit real keys.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+    disk:
+      name: jaegr-data
+      mountPath: /data
+      sizeGB: 1
