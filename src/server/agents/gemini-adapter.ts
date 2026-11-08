@@ -6,7 +6,7 @@ export class GeminiAgentAdapter implements AgentAdapter {
   private apiKey: string;
   private modelName: string;
 
-  constructor(apiKey?: string, modelName = "gemini-3.8-flash") {
+  constructor(apiKey?: string, modelName = process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash") {
     const key = apiKey || process.env.GEMINI_API_KEY;
     if (!key) {
       throw new Error("GEMINI_API_KEY is not configured in the environment.");
@@ -68,7 +68,7 @@ Generate an ActionProposal JSON with the following exact keys:
 - reasoning: string explaining why this action was selected
 `;
 
-    // Gemini 3.x models (including gemini-3.8-flash) are served through the
+    // Gemini 3.x models (including gemini-3.6-flash) are served through the
     // Interactions API. `generateContent` is deprecated for these models.
     const response = await ai.interactions.create({
       model: this.modelName,
