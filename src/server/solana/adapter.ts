@@ -9,7 +9,7 @@ import {
   getTransferCheckedInstruction,
   parseTransferCheckedInstruction
 } from "@solana-program/token";
-import { ActionProposal, DecodedInstruction, InstructionAccount } from "@/domain/actions/proposal";
+import { ActionProposal, DecodedInstruction, DecodedTransactionBundle, InstructionAccount } from "@/domain/actions/proposal";
 
 // Default dummy sender address used for constructing unsigned proposals when none is provided.
 // This is a valid base58 Devnet address used only for instruction construction/inspection.
@@ -235,6 +235,71 @@ export class SolanaInstructionAdapter {
         accounts: [],
         decodingError: `Unsupported action type: '${proposal.actionType}'`
       }
+    };
+  }
+
+  /**
+   * Decodes a proposal into an inspectable instruction bundle.
+   *
+   * Single-instruction proposals produce a bundle of one. A `batch` proposal
+   * decodes every sub-proposal so the evaluator can enforce cumulative
+   * spending and per-instruction allowlists across the whole transaction.
+   */
+  static processProposalBundle(proposal: ActionProposal): DecodedTransactionBundle {
+    if (proposal.actionType !== "batch") {
+      const { decoded } = SolanaInstructionAdapter.processProposal(proposal);
+      return {
+        instructions: [decoded],
+        totalLamportsProposed: decoded.lamports ?? 0n,
+        recipients: decoded.recipient ? [decoded.recipient] : [],
+        programs: [decoded.programAddress],
+        hasUnsupported: decoded.instructionType === "UNSUPPORTED",
+        hasMalformed: decoded.instructionType === "MALFORMED",
+        errors: decoded.decodingError ? [decoded.decodingError] : []
+      };
+    }
+
+    const subProposals = proposal.parameters.subProposals ?? [];
+    if (subProposals.length === 0) {
+      const decoded: DecodedInstruction = {
+        programAddress: "Unknown",
+        instructionType: "UNSUPPORTED",
+        accounts: [],
+        decodingError: "Batch proposal contains no sub-proposals"
+      };
+      return {
+        instructions: [decoded],
+        totalLamportsProposed: 0n,
+        recipients: [],
+        programs: [],
+        hasUnsupported: true,
+        hasMalformed: false,
+        errors: [decoded.decodingError ?? "Invalid batch"]
+      };
+    }
+
+    const instructions = subProposals.map(
+      (subProposal) => SolanaInstructionAdapter.processProposal(subProposal).decoded
+    );
+    const recipients = instructions
+      .map((instruction) => instruction.recipient)
+      .filter((recipient): recipient is string => Boolean(recipient));
+    const programs = Array.from(new Set(instructions.map((instruction) => instruction.programAddress)));
+    const errors = instructions
+      .map((instruction) => instruction.decodingError)
+      .filter((error): error is string => Boolean(error));
+
+    return {
+      instructions,
+      totalLamportsProposed: instructions.reduce(
+        (total, instruction) => (instruction.lamports !== undefined ? total + instruction.lamports : total),
+        0n
+      ),
+      recipients,
+      programs,
+      hasUnsupported: instructions.some((instruction) => instruction.instructionType === "UNSUPPORTED"),
+      hasMalformed: instructions.some((instruction) => instruction.instructionType === "MALFORMED"),
+      errors
     };
   }
 }
