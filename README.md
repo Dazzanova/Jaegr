@@ -5,7 +5,7 @@
 [![Track](https://img.shields.io/badge/Track-Solana%20AI-9945FF?style=flat-square)](https://solana.com)
 [![Solana SDK](https://img.shields.io/badge/@solana/kit-8.6.0-14F195?style=flat-square)](https://github.com/solana-labs/solana-web3.js)
 [![Framework](https://img.shields.io/badge/Next.js-16%20App%20Router-black?style=flat-square)](https://nextjs.org)
-[![Engine](https://img.shields.io/badge/Gemini-2.5%20Flash-4285F4?style=flat-square)](https://ai.google.dev)
+[![Engine](https://img.shields.io/badge/Gemini-3.8%20Flash-4285F4?style=flat-square)](https://ai.google.dev)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square)](LICENSE)
 
 ---
@@ -43,7 +43,7 @@ A transaction may **simulate successfully** while being **policy-BLOCKED** (a bl
                      ▼
        ┌───────────────────────────┐
        │     Reference AI Agent    │ ───► METRIC 1: Agent Resistance
-       │ (Gemini 2.5 / Sim Adapter)│      (RESISTED vs COMPROMISED)
+       │ (Gemini 3.8 / Sim Adapter)│      (RESISTED vs COMPROMISED)
        └───────────────────────────┘
                      │ (Proposed Action JSON)
                      ▼
@@ -85,7 +85,7 @@ A transaction may **simulate successfully** while being **policy-BLOCKED** (a bl
 - **Five Mandatory Adversarial Scenarios:** Prompt injection, spend limit escalation, recipient substitution, unauthorized DeFi program calls, and transaction replay.
 - **Side-by-Side Agent Profiles:** Compare **Naive DeFi Assistant (Vulnerable)** against **Hardened Solana Sentinel (Hardened)** side by side.
 - **Deterministic Offline Demo Mode:** Fully functional with zero API keys or external network connectivity.
-- **Google Gemini 2.5 Flash Integration:** Live AI testing using structured JSON output schemas (server-side only).
+- **Google Gemini 3.8 Flash Integration:** Live AI testing using structured JSON output schemas (server-side only).
 - **Embedded SQLite Audit History:** All test runs and simulation results persisted via Drizzle ORM.
 
 ---

@@ -6,7 +6,7 @@ export class GeminiAgentAdapter implements AgentAdapter {
   private apiKey: string;
   private modelName: string;
 
-  constructor(apiKey?: string, modelName = "gemini-2.5-flash") {
+  constructor(apiKey?: string, modelName = "gemini-3.8-flash") {
     const key = apiKey || process.env.GEMINI_API_KEY;
     if (!key) {
       throw new Error("GEMINI_API_KEY is not configured in the environment.");
@@ -16,7 +16,11 @@ export class GeminiAgentAdapter implements AgentAdapter {
   }
 
   async execute(input: AgentInput): Promise<AgentExecutionOutput> {
-    const ai = new GoogleGenAI({ apiKey: this.apiKey });
+    // The Interactions API requires v1beta for JSON response formatting.
+    const ai = new GoogleGenAI({
+      apiKey: this.apiKey,
+      httpOptions: { apiVersion: "v1beta" }
+    });
     const start = performance.now();
 
     const isVulnerable = input.profileType === "vulnerable";
@@ -64,17 +68,19 @@ Generate an ActionProposal JSON with the following exact keys:
 - reasoning: string explaining why this action was selected
 `;
 
-    const response = await ai.models.generateContent({
+    // Gemini 3.x models (including gemini-3.8-flash) are served through the
+    // Interactions API. `generateContent` is deprecated for these models.
+    const response = await ai.interactions.create({
       model: this.modelName,
-      contents: prompt,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json"
-      }
+      input: prompt,
+      system_instruction: systemInstruction,
+      response_format: { type: "text", mime_type: "application/json" },
+      // Do not retain untrusted prompt content server-side.
+      store: false
     });
 
     const elapsed = Math.round(performance.now() - start);
-    const rawText = response.text || "{}";
+    const rawText = response.output_text || "{}";
 
     let parsedJson: unknown;
     try {

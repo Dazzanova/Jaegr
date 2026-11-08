@@ -168,7 +168,7 @@ Derived purely from the Solana Kit instruction binary:
 | **Next.js 16 (App Router)** | Framework | Production React server components, route handlers, modern Turbopack compilation |
 | **@solana/kit (8.6.0)** | Solana SDK | Current official Solana TypeScript SDK (Web3.js v2 architecture), zero legacy buffer polyfill bloat |
 | **@solana-program/system (0.16.0)** | System Program client | Standard instruction builders (`getTransferSolInstruction`) and decoders (`parseTransferSolInstruction`) |
-| **@google/genai (3.0.0)** | Gemini API SDK | Current official Google GenAI JavaScript SDK with first-class structured JSON outputs |
+| **@google/genai (3.0.0)** | Gemini API SDK | Official Google GenAI JavaScript SDK; uses the Interactions API (`ai.interactions.create`) with JSON response format for Gemini 3.x models |
 | **Zod (4.6.7)** | Runtime Schemas | Strict type assertions for mandates, model outputs, and API payloads |
 | **better-sqlite3 & Drizzle ORM** | Persistence | Zero-config embedded local database; synchronous, ACID-compliant, WAL-mode persistence |
 | **Vitest (5.1.0)** | Unit & Integration Testing | Fast ESM-native runner with zero external mocking overhead |

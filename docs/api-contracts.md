@@ -87,7 +87,7 @@ Checks available agent profiles and whether live Gemini API credentials are conf
     },
     {
       "id": "gemini",
-      "name": "Google Gemini (gemini-2.5-flash)",
+      "name": "Google Gemini (gemini-3.8-flash)",
       "available": false,
       "description": "Unavailable: GEMINI_API_KEY is not configured in environment variables."
     }

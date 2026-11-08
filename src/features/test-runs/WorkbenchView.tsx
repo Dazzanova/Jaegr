@@ -444,7 +444,7 @@ ${r.findings.map((f) => `  - [${f.severity}] ${f.ruleViolated}: ${f.explanation}
                   />
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-semibold text-white">Google Gemini 2.5 Flash</span>
+                      <span className="text-xs font-semibold text-white">Google Gemini 3.8 Flash</span>
                       {geminiAvailable ? (
                         <Badge variant="success">Configured</Badge>
                       ) : (

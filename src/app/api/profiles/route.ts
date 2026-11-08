@@ -15,7 +15,7 @@ export async function GET() {
       },
       {
         id: "gemini",
-        name: "Google Gemini (gemini-2.5-flash)",
+        name: "Google Gemini (gemini-3.8-flash)",
         available: hasGeminiKey,
         description: hasGeminiKey
           ? "Live AI model integration using official Google GenAI SDK."
