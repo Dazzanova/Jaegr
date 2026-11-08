@@ -16,6 +16,7 @@ import { ResultCard } from "./ResultCard";
 import { Badge } from "@/components/ui/badge";
 import { solToLamports } from "@/domain/mandates/mandate";
 import { useWallet } from "@/lib/wallet/WalletContext";
+import { describeWalletSigningError } from "@/lib/wallet/signing-guard";
 
 interface WorkbenchViewProps {
   scenarios: ScenarioItem[];
@@ -297,11 +298,7 @@ export function WorkbenchView({ scenarios, geminiAvailable, onRunComplete }: Wor
       setExecutionStatus(data.status === "CONFIRMED" ? "Confirmed on Devnet" : data.status);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      setExecutionStatus(
-        /reject|denied|cancel/i.test(message)
-          ? `Wallet approval was rejected or cancelled: ${message}`
-          : message
-      );
+      setExecutionStatus(describeWalletSigningError(message));
     } finally {
       setIsSubmitting(false);
     }

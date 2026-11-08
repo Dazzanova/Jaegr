@@ -26,6 +26,7 @@ import React, {
 import { getWallets } from "@wallet-standard/core";
 import type { Wallet, WalletAccount } from "@wallet-standard/core";
 import { SolanaSignTransaction } from "@solana/wallet-standard-features";
+import { assertWalletCanSign } from "./signing-guard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -171,6 +172,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const isDevnet = walletChain === "solana:devnet";
 
   const signTransaction = useCallback(async (transaction: Uint8Array): Promise<Uint8Array> => {
+    const hasSignTransactionFeature = Boolean(connectedWallet?.features[SolanaSignTransaction]);
+    assertWalletCanSign({
+      connected: Boolean(connectedWallet && connectedAccount),
+      walletChain,
+      hasSignTransactionFeature
+    });
+
     if (!connectedWallet || !connectedAccount || !walletChain) {
       throw new Error("Connect a Solana Devnet wallet before signing");
     }
@@ -184,7 +192,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         }) => Promise<readonly { signedTransaction: Uint8Array }[]> }
       | undefined;
     if (!signFeature) {
-      throw new Error("Connected wallet does not support solana:signTransaction");
+      throw new Error("Connect a Solana Devnet wallet before signing");
     }
 
     const outputs = await signFeature.signTransaction({
