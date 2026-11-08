@@ -15,6 +15,7 @@ import { StoredTestRun } from "@/server/persistence/repository";
 import { ResultCard } from "./ResultCard";
 import { Badge } from "@/components/ui/badge";
 import { solToLamports } from "@/domain/mandates/mandate";
+import { useWallet } from "@/lib/wallet/WalletContext";
 
 interface WorkbenchViewProps {
   scenarios: ScenarioItem[];
@@ -23,6 +24,7 @@ interface WorkbenchViewProps {
 }
 
 export function WorkbenchView({ scenarios, geminiAvailable, onRunComplete }: WorkbenchViewProps) {
+  const { publicKey, connectedWallet, isDevnet, signTransaction } = useWallet();
   // Config state
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>("ALL");
   const [profileType, setProfileType] = useState<"vulnerable" | "hardened">("vulnerable");
@@ -39,6 +41,46 @@ export function WorkbenchView({ scenarios, geminiAvailable, onRunComplete }: Wor
   const [results, setResults] = useState<StoredTestRun[]>([]);
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedExecutionRunId, setSelectedExecutionRunId] = useState<string>("");
+  const [preparedExecution, setPreparedExecution] = useState<{
+    unsignedWireTransaction: string;
+    lastValidBlockHeight: string;
+    preparedAt: string;
+    simulation: {
+      status: string;
+      logs?: string[];
+      unitsConsumed?: string;
+      err?: unknown;
+      errorMessage?: string;
+      timestamp?: string;
+    };
+    authorization: { allowed: boolean; findings: Array<{ ruleViolated: string; explanation: string }> };
+    inspected: {
+      programAddress: string;
+      instructionType: string;
+      recipient?: string;
+      source?: string;
+      lamports?: string;
+      tokenAmount?: string;
+      tokenMint?: string;
+      tokenDecimals?: number;
+      accounts: Array<{ address: string; role: string }>;
+    };
+    feePayerAddress: string;
+    mandate: Record<string, unknown>;
+    proposal: StoredTestRun["proposal"];
+    inputKey: string;
+  } | null>(null);
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [executionStatus, setExecutionStatus] = useState<string | null>(null);
+  const [executionResult, setExecutionResult] = useState<{
+    status?: string;
+    signature?: string;
+    slot?: string;
+    explorerUrl?: string;
+    error?: string;
+  } | null>(null);
 
   const handleResetMandate = () => {
     setMaxSol("0.1");
@@ -60,6 +102,7 @@ export function WorkbenchView({ scenarios, geminiAvailable, onRunComplete }: Wor
       }
 
       const customMandate = {
+        id: "workbench-custom",
         name: "Custom Testing Mandate",
         maxLamportsPerAction: lamportsStr,
         allowedRecipients: [recipient],
@@ -137,6 +180,133 @@ export function WorkbenchView({ scenarios, geminiAvailable, onRunComplete }: Wor
     }
   };
 
+  const buildExecutionMandate = () => ({
+    id: "workbench-custom",
+    name: "Custom Testing Mandate",
+    maxLamportsPerAction: solToLamports(maxSol).toString(),
+    allowedRecipients: [recipient],
+    allowedPrograms: [programId],
+    permittedActionTypes: ["sol_transfer"],
+    seenActionIds: ["ACT-REPLAY-TX-0099"]
+  });
+
+  const executionInputKey = JSON.stringify({
+    runId: selectedExecutionRunId,
+    maxSol,
+    recipient,
+    programId,
+    publicKey
+  });
+
+  const handlePrepareExecution = async () => {
+    const run = results.find((candidate) => candidate.runId === selectedExecutionRunId);
+    if (!run || !publicKey || !connectedWallet || !isDevnet) return;
+    setIsPreparing(true);
+    setExecutionStatus("Preparing and simulating on Devnet...");
+    setExecutionResult(null);
+    try {
+      const mandate = buildExecutionMandate();
+      const response = await fetch("/api/solana/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal: run.proposal, mandate, feePayerAddress: publicKey })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (data.simulation) {
+          setPreparedExecution({
+            unsignedWireTransaction: data.unsignedWireTransaction,
+            lastValidBlockHeight: data.lastValidBlockHeight,
+            preparedAt: data.preparedAt,
+            simulation: data.simulation,
+            authorization: data.authorization,
+            inspected: data.inspected,
+            feePayerAddress: data.feePayerAddress,
+            mandate,
+            proposal: run.proposal,
+            inputKey: executionInputKey
+          });
+        }
+        throw new Error(data.error || data.details || "Transaction preparation failed");
+      }
+      setPreparedExecution({
+        unsignedWireTransaction: data.unsignedWireTransaction,
+        lastValidBlockHeight: data.lastValidBlockHeight,
+        preparedAt: data.preparedAt,
+        simulation: data.simulation,
+        authorization: data.authorization,
+        inspected: data.inspected,
+        feePayerAddress: data.feePayerAddress,
+        mandate,
+        proposal: run.proposal,
+        inputKey: executionInputKey
+      });
+      setExecutionStatus(
+        data.simulation.status === "SUCCESS"
+          ? "Simulation succeeded. Review the transaction, then approve it in your wallet."
+          : `Simulation ${data.simulation.status}. Signing is disabled.`
+      );
+    } catch (error: unknown) {
+      setPreparedExecution(null);
+      setExecutionStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsPreparing(false);
+    }
+  };
+
+  const handleSignAndSubmit = async () => {
+    if (!preparedExecution || !publicKey || !connectedWallet || !isDevnet) return;
+    if (preparedExecution.inputKey !== executionInputKey) {
+      setExecutionStatus("Proposal, mandate, or wallet changed since inspection; prepare again");
+      return;
+    }
+    if (preparedExecution.authorization.allowed !== true) {
+      setExecutionStatus("Authorization is not satisfied; signing is blocked");
+      return;
+    }
+    if (preparedExecution.simulation.status !== "SUCCESS") {
+      setExecutionStatus("Simulation must succeed before signing is allowed");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setExecutionStatus("Waiting for explicit wallet approval...");
+    setExecutionResult(null);
+    try {
+      const unsignedBytes = Uint8Array.from(atob(preparedExecution.unsignedWireTransaction), (char) => char.charCodeAt(0));
+      const signedBytes = await signTransaction(unsignedBytes);
+      let binary = "";
+      signedBytes.forEach((value) => { binary += String.fromCharCode(value); });
+      const signedWireTransaction = btoa(binary);
+      setExecutionStatus("Signed by wallet. Submitting to Devnet...");
+      const response = await fetch("/api/solana/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proposal: preparedExecution.proposal,
+          mandate: preparedExecution.mandate,
+          feePayerAddress: preparedExecution.feePayerAddress,
+          unsignedWireTransaction: preparedExecution.unsignedWireTransaction,
+          signedWireTransaction,
+          lastValidBlockHeight: preparedExecution.lastValidBlockHeight
+        })
+      });
+      const data = await response.json();
+      setExecutionResult(data);
+      if (!response.ok) throw new Error(data.error || "Transaction execution failed");
+      setExecutionStatus(data.status === "CONFIRMED" ? "Confirmed on Devnet" : data.status);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExecutionStatus(
+        /reject|denied|cancel/i.test(message)
+          ? `Wallet approval was rejected or cancelled: ${message}`
+          : message
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleExportMarkdown = () => {
     if (results.length === 0) return;
     const reportText = `# AgentCrashTest Security Assessment Report
@@ -162,6 +332,18 @@ ${r.findings.map((f) => `  - [${f.severity}] ${f.ruleViolated}: ${f.explanation}
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const selectedExecutionRun = results.find((candidate) => candidate.runId === selectedExecutionRunId) ?? null;
+  const hasUnresolvedSubmission =
+    executionResult?.status === "SUBMITTED" || executionResult?.status === "UNKNOWN";
+  const preparedIsCurrent = preparedExecution?.inputKey === executionInputKey;
+  const canSignAndSubmit =
+    Boolean(preparedExecution) &&
+    preparedIsCurrent &&
+    preparedExecution?.authorization.allowed === true &&
+    preparedExecution?.simulation.status === "SUCCESS" &&
+    !isSubmitting &&
+    !hasUnresolvedSubmission;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -446,6 +628,258 @@ ${r.findings.map((f) => `  - [${f.severity}] ${f.ruleViolated}: ${f.explanation}
           </div>
         </div>
       )}
+
+      <div className="p-5 rounded-xl border border-emerald-900/60 bg-emerald-950/10 space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-white">Devnet Transaction Execution</h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Preparing and simulating never authorizes a transaction. Signing happens only in your wallet,
+            and only after you explicitly click <span className="text-slate-200">Sign &amp; Submit</span>.
+            The server independently re-inspects and re-authorizes the signed wire transaction before submission.
+          </p>
+        </div>
+
+        {/* Environment */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <label className="text-slate-400">
+            Transaction proposal
+            <select
+              value={selectedExecutionRunId}
+              onChange={(event) => {
+                setSelectedExecutionRunId(event.target.value);
+                setPreparedExecution(null);
+                setExecutionResult(null);
+                setExecutionStatus(null);
+              }}
+              className="mt-1 w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-slate-200 font-mono"
+            >
+              <option value="">Select an evaluated proposal</option>
+              {results.map((run) => (
+                <option key={run.runId} value={run.runId}>
+                  {run.scenarioName} — {run.policyEnforcementVerdict}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="rounded border border-slate-800 bg-slate-950/70 p-3 space-y-1">
+            <div>
+              Network:{" "}
+              <span className={isDevnet ? "text-emerald-300" : "text-rose-300"}>
+                {isDevnet ? "Devnet (verified by wallet)" : "Not Devnet — execution disabled"}
+              </span>
+            </div>
+            <div>
+              Connected wallet:{" "}
+              <span className="text-slate-200 font-mono break-all">{publicKey || "Disconnected"}</span>
+            </div>
+            <div>
+              Fee payer:{" "}
+              <span className="text-slate-200 font-mono break-all">{publicKey || "Unavailable"}</span>
+            </div>
+            <div>
+              Wallet signing capability:{" "}
+              <span className={connectedWallet ? "text-emerald-300" : "text-amber-300"}>
+                {connectedWallet ? "solana:signTransaction" : "No wallet connected"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {!publicKey && (
+          <div className="rounded border border-amber-900/60 bg-amber-950/20 p-3 text-xs text-amber-300">
+            Connect a Wallet Standard wallet set to Devnet before preparing a transaction.
+          </div>
+        )}
+        {publicKey && !isDevnet && (
+          <div className="rounded border border-rose-900/60 bg-rose-950/20 p-3 text-xs text-rose-300">
+            The connected wallet does not advertise the <span className="font-mono">solana:devnet</span> chain.
+            Switch the wallet network to Devnet and reconnect. Signing is blocked.
+          </div>
+        )}
+
+        {/* Proposal overview */}
+        {selectedExecutionRun && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-300">
+            <div className="rounded border border-slate-800 bg-slate-950/70 p-3 space-y-1">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Transaction overview</div>
+              <div>Transaction ID: <span className="font-mono break-all">{selectedExecutionRun.proposal.actionId}</span></div>
+              <div>Network: <span className="text-emerald-300">Devnet</span></div>
+              <div>Instruction count: 1</div>
+              <div>Program ID: <span className="font-mono break-all">{selectedExecutionRun.decodedInstruction.programAddress}</span></div>
+              <div>Recipient: <span className="font-mono break-all">{selectedExecutionRun.decodedInstruction.recipient || "N/A"}</span></div>
+              <div>
+                Amount:{" "}
+                {selectedExecutionRun.decodedInstruction.lamports !== undefined
+                  ? `${selectedExecutionRun.decodedInstruction.lamports.toString()} lamports`
+                  : selectedExecutionRun.decodedInstruction.tokenAmount !== undefined
+                    ? `${selectedExecutionRun.decodedInstruction.tokenAmount.toString()} token base units`
+                    : "N/A"}
+              </div>
+              {selectedExecutionRun.decodedInstruction.tokenMint && (
+                <div>Token mint: <span className="font-mono break-all">{selectedExecutionRun.decodedInstruction.tokenMint}</span></div>
+              )}
+            </div>
+            <div className="rounded border border-slate-800 bg-slate-950/70 p-3 space-y-1">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Security checks</div>
+              <div>
+                Agent resistance:{" "}
+                <span className={selectedExecutionRun.agentResistanceVerdict === "RESISTED" ? "text-emerald-300" : "text-amber-300"}>
+                  {selectedExecutionRun.agentResistanceVerdict}
+                </span>
+              </div>
+              <div>
+                Authorization:{" "}
+                <span className={selectedExecutionRun.policyEnforcementVerdict === "PASSED" ? "text-emerald-300" : "text-rose-300"}>
+                  {selectedExecutionRun.policyEnforcementVerdict}
+                </span>
+              </div>
+              <div>Proposal simulation: <span className="text-sky-300">{selectedExecutionRun.simulationResult.status}</span></div>
+              <div className="text-amber-300">
+                Warnings: wallet connection and simulation are never authorization. Only a fresh wallet signature
+                plus server-side re-validation can submit.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Exact prepared transaction review */}
+        {preparedExecution && preparedIsCurrent && (
+          <div
+            className={`rounded border p-3 text-xs space-y-2 ${
+              preparedExecution.authorization.allowed && preparedExecution.simulation.status === "SUCCESS"
+                ? "border-sky-900/60 bg-sky-950/20"
+                : "border-rose-900/60 bg-rose-950/20"
+            }`}
+          >
+            <div className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
+              Review before signing — exact server-prepared transaction
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <div>Fee payer: <span className="font-mono break-all">{preparedExecution.feePayerAddress}</span></div>
+                <div>Instruction type: <span className="font-mono">{preparedExecution.inspected.instructionType}</span></div>
+                <div>Program: <span className="font-mono break-all">{preparedExecution.inspected.programAddress}</span></div>
+                <div>Recipient: <span className="font-mono break-all">{preparedExecution.inspected.recipient || "N/A"}</span></div>
+                <div>
+                  Amount:{" "}
+                  {preparedExecution.inspected.lamports !== undefined
+                    ? `${preparedExecution.inspected.lamports} lamports`
+                    : preparedExecution.inspected.tokenAmount !== undefined
+                      ? `${preparedExecution.inspected.tokenAmount} token base units`
+                      : "N/A"}
+                </div>
+                <div>Prepared at: <span className="font-mono">{preparedExecution.preparedAt}</span></div>
+                <div>Blockhash valid until height: <span className="font-mono">{preparedExecution.lastValidBlockHeight}</span></div>
+              </div>
+              <div className="space-y-1">
+                <div>
+                  Server authorization:{" "}
+                  <span className={preparedExecution.authorization.allowed ? "text-emerald-300" : "text-rose-300"}>
+                    {preparedExecution.authorization.allowed ? "PASSED" : "BLOCKED"}
+                  </span>
+                </div>
+                <div>
+                  Exact prepared simulation:{" "}
+                  <span className={preparedExecution.simulation.status === "SUCCESS" ? "text-emerald-300" : "text-rose-300"}>
+                    {preparedExecution.simulation.status}
+                  </span>
+                </div>
+                {preparedExecution.simulation.unitsConsumed && (
+                  <div>Compute units: <span className="font-mono">{preparedExecution.simulation.unitsConsumed}</span></div>
+                )}
+                {preparedExecution.simulation.timestamp && (
+                  <div>Simulated at: <span className="font-mono">{preparedExecution.simulation.timestamp}</span></div>
+                )}
+                {preparedExecution.simulation.errorMessage && (
+                  <div className="text-rose-300">{preparedExecution.simulation.errorMessage}</div>
+                )}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Account privileges</div>
+              {preparedExecution.inspected.accounts.map((account) => (
+                <div key={`${account.address}-${account.role}`} className="font-mono text-[11px] break-all">
+                  {account.address} — {account.role}
+                </div>
+              ))}
+            </div>
+            {preparedExecution.simulation.logs && preparedExecution.simulation.logs.length > 0 && (
+              <details>
+                <summary className="cursor-pointer text-slate-400">Simulation program logs</summary>
+                <pre className="mt-1 max-h-40 overflow-auto rounded bg-slate-950 p-2 text-[10px] text-slate-400">
+                  {preparedExecution.simulation.logs.join("\n")}
+                </pre>
+              </details>
+            )}
+            {(!preparedExecution.authorization.allowed || preparedExecution.simulation.status !== "SUCCESS") && (
+              <div className="text-rose-300">
+                Signing is disabled: authorization must pass and simulation must succeed.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Execution status / evidence */}
+        {executionStatus && (
+          <div className="text-xs text-slate-300" role="status">{executionStatus}</div>
+        )}
+        {executionResult && (
+          <div
+            className={`rounded border p-3 text-xs space-y-1 ${
+              executionResult.status === "CONFIRMED"
+                ? "border-emerald-900/60 bg-emerald-950/20"
+                : executionResult.status === "FAILED"
+                  ? "border-rose-900/60 bg-rose-950/20"
+                  : "border-amber-900/60 bg-amber-950/20"
+            }`}
+          >
+            <div className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Execution evidence</div>
+            <div>Status: <span className="text-sky-300">{executionResult.status || "ERROR"}</span></div>
+            {executionResult.signature && (
+              <div>Signature: <span className="font-mono break-all">{executionResult.signature}</span></div>
+            )}
+            {executionResult.slot && <div>Confirmation slot: <span className="font-mono">{executionResult.slot}</span></div>}
+            {executionResult.explorerUrl && (
+              <a className="text-purple-300 underline" href={executionResult.explorerUrl} target="_blank" rel="noreferrer">
+                Verify on Solana Explorer (Devnet)
+              </a>
+            )}
+            {executionResult.status === "UNKNOWN" && (
+              <div className="text-amber-300">
+                Submission outcome is uncertain. Do not resubmit. Inspect the signature/status first.
+              </div>
+            )}
+            {executionResult.error && <div className="text-rose-300">{executionResult.error}</div>}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={handlePrepareExecution}
+            disabled={
+              !selectedExecutionRunId ||
+              !publicKey ||
+              !connectedWallet ||
+              !isDevnet ||
+              isPreparing ||
+              isSubmitting ||
+              hasUnresolvedSubmission
+            }
+            className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-xs disabled:opacity-40"
+          >
+            {isPreparing ? "Inspecting & simulating..." : "Prepare & Simulate"}
+          </button>
+          <button
+            type="button"
+            onClick={handleSignAndSubmit}
+            disabled={!canSignAndSubmit}
+            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-40"
+          >
+            {isSubmitting ? "Waiting for wallet..." : "Sign & Submit to Devnet"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

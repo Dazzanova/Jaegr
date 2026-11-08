@@ -146,7 +146,7 @@ export default function Home() {
             <span>SDK: @solana/kit 8.6.0</span>
           </div>
           <div>
-            Built with Next.js App Router, Drizzle SQLite, and Google GenAI. Unsigned instruction proposals only.
+            Built with Next.js App Router, Drizzle SQLite, and Google GenAI. Explicit wallet-approved execution is Devnet-only.
           </div>
         </div>
       </footer>

@@ -25,6 +25,7 @@ import React, {
 } from "react";
 import { getWallets } from "@wallet-standard/core";
 import type { Wallet, WalletAccount } from "@wallet-standard/core";
+import { SolanaSignTransaction } from "@solana/wallet-standard-features";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,10 +44,16 @@ export interface WalletContextValue {
   disconnecting: boolean;
   /** Most recent connection error message. */
   error: string | null;
+  /** Wallet Standard chain identifier selected for signing. */
+  walletChain: string | null;
+  /** True when the connected account advertises Solana Devnet. */
+  isDevnet: boolean;
   /** Attempt to connect to the given wallet. */
   connect: (wallet: Wallet) => Promise<void>;
   /** Disconnect the currently connected wallet. */
   disconnect: () => Promise<void>;
+  /** Sign an unsigned transaction after an explicit user action. */
+  signTransaction: (transaction: Uint8Array) => Promise<Uint8Array>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -158,6 +165,38 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, [connectedWallet]);
 
   const publicKey = connectedAccount ? accountAddress(connectedAccount) : null;
+  const walletChain = connectedAccount?.chains.find((chain) => chain === "solana:devnet")
+    || connectedAccount?.chains.find((chain) => chain.startsWith("solana:"))
+    || null;
+  const isDevnet = walletChain === "solana:devnet";
+
+  const signTransaction = useCallback(async (transaction: Uint8Array): Promise<Uint8Array> => {
+    if (!connectedWallet || !connectedAccount || !walletChain) {
+      throw new Error("Connect a Solana Devnet wallet before signing");
+    }
+
+    const signFeature = connectedWallet.features[SolanaSignTransaction] as
+      | { signTransaction: (input: {
+          account: WalletAccount;
+          transaction: Uint8Array;
+          chain?: string;
+          options?: { preflightCommitment?: "processed" | "confirmed" | "finalized" };
+        }) => Promise<readonly { signedTransaction: Uint8Array }[]> }
+      | undefined;
+    if (!signFeature) {
+      throw new Error("Connected wallet does not support solana:signTransaction");
+    }
+
+    const outputs = await signFeature.signTransaction({
+      account: connectedAccount,
+      transaction,
+      chain: walletChain,
+      options: { preflightCommitment: "confirmed" }
+    });
+    const signedTransaction = outputs[0]?.signedTransaction;
+    if (!signedTransaction) throw new Error("Wallet returned no signed transaction");
+    return signedTransaction;
+  }, [connectedAccount, connectedWallet, walletChain]);
 
   const value = useMemo<WalletContextValue>(
     () => ({
@@ -168,10 +207,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       connecting,
       disconnecting,
       error,
+      walletChain,
+      isDevnet,
       connect,
-      disconnect
+      disconnect,
+      signTransaction
     }),
-    [wallets, connectedWallet, connectedAccount, publicKey, connecting, disconnecting, error, connect, disconnect]
+    [wallets, connectedWallet, connectedAccount, publicKey, connecting, disconnecting, error, walletChain, isDevnet, connect, disconnect, signTransaction]
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
