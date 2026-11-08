@@ -39,6 +39,7 @@ export async function GET() {
       }
     ],
     groqConfigured: hasGroqKey,
+    groqModel,
     geminiConfigured: hasGeminiKey
   });
 }

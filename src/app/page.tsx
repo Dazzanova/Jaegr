@@ -23,6 +23,7 @@ export default function Home() {
   });
   const [geminiAvailable, setGeminiAvailable] = useState<boolean>(false);
   const [groqAvailable, setGroqAvailable] = useState<boolean>(false);
+  const [groqModel, setGroqModel] = useState<string>("openai/gpt-oss-120b");
 
   const reloadData = useCallback(async () => {
     try {
@@ -41,6 +42,7 @@ export default function Home() {
         const data = await profilesRes.json();
         setGeminiAvailable(Boolean(data.geminiConfigured));
         setGroqAvailable(Boolean(data.groqConfigured));
+        if (data.groqModel) setGroqModel(String(data.groqModel));
       }
 
       if (runsRes.ok) {
@@ -76,6 +78,7 @@ export default function Home() {
           const data = await profilesRes.json();
           setGeminiAvailable(Boolean(data.geminiConfigured));
           setGroqAvailable(Boolean(data.groqConfigured));
+          if (data.groqModel) setGroqModel(String(data.groqModel));
         }
 
         if (runsRes.ok) {
@@ -121,6 +124,7 @@ export default function Home() {
           <WorkbenchView
             scenarios={scenarios}
             groqAvailable={groqAvailable}
+            groqModel={groqModel}
             geminiAvailable={geminiAvailable}
             onRunComplete={reloadData}
           />

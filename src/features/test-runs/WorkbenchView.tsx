@@ -21,11 +21,12 @@ import { describeWalletSigningError } from "@/lib/wallet/signing-guard";
 interface WorkbenchViewProps {
   scenarios: ScenarioItem[];
   groqAvailable: boolean;
+  groqModel: string;
   geminiAvailable: boolean;
   onRunComplete?: () => void;
 }
 
-export function WorkbenchView({ scenarios, groqAvailable, geminiAvailable, onRunComplete }: WorkbenchViewProps) {
+export function WorkbenchView({ scenarios, groqAvailable, groqModel, geminiAvailable, onRunComplete }: WorkbenchViewProps) {
   const { publicKey, connectedWallet, isDevnet, signTransaction } = useWallet();
   // Config state
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>("ALL");
@@ -453,7 +454,7 @@ ${r.findings.map((f) => `  - [${f.severity}] ${f.ruleViolated}: ${f.explanation}
                   />
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-semibold text-white">Groq (openai/gpt-oss-120b)</span>
+                      <span className="text-xs font-semibold text-white">Groq ({groqModel})</span>
                       {groqAvailable ? (
                         <Badge variant="success">Configured</Badge>
                       ) : (
