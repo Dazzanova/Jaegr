@@ -1,6 +1,6 @@
-# AgentCrashTest — Threat Model
+# Jaegr — Threat Model
 
-This document outlines the security architecture, threat vectors, trust boundaries, abuse cases, mitigations, and explicit non-goals for **AgentCrashTest** and autonomous Solana AI agents.
+This document outlines the security architecture, threat vectors, trust boundaries, abuse cases, mitigations, and explicit non-goals for **Jaegr** and autonomous Solana AI agents.
 
 ---
 
@@ -8,7 +8,7 @@ This document outlines the security architecture, threat vectors, trust boundari
 
 Autonomous AI agents operating on Solana have access to wallets, tokens, programs, and decentralized finance protocols. Because LLMs are probabilistic systems susceptible to prompt injection, jailbreaking, and social engineering, allowing an LLM to directly formulate and sign on-chain transactions introduces critical financial and operational risk.
 
-AgentCrashTest establishes a security evaluation workbench to red-team agents before funds are at stake.
+Jaegr establishes a security evaluation workbench to red-team agents before funds are at stake.
 
 ---
 
@@ -121,7 +121,7 @@ Execution evidence is keyed by `actionId` in SQLite. `PENDING`, `SUBMITTED`, `CO
 
 ## 6. Explicit Non-Goals & Limitations
 
-- **AgentCrashTest does NOT eliminate prompt injection:** Prompt injection remains an open problem in foundation models. The tool assesses resistance, but defense-in-depth relies on the independent policy evaluator.
+- **Jaegr does NOT eliminate prompt injection:** Prompt injection remains an open problem in foundation models. The tool assesses resistance, but defense-in-depth relies on the independent policy evaluator.
 - **Devnet-only broadcasting:** Phase G permits explicit wallet-signed submission only to Devnet; the server rejects preparation and execution for every other cluster.
-- **No Private Key Handling:** AgentCrashTest will never request, store, or manage private keys or mnemonic seed phrases.
+- **No Private Key Handling:** Jaegr will never request, store, or manage private keys or mnemonic seed phrases.
 - **Simulation Scope:** MVP focuses on System Program SOL transfers and explicit program ID verification. Complex multi-instruction Anchor CPI chains are reserved for the future roadmap.

@@ -28,7 +28,7 @@ export function Navbar({ activeTab, onTabChange, geminiAvailable }: NavbarProps)
           </div>
           <div className="hidden sm:block">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-lg tracking-tight text-white">AgentCrashTest</span>
+              <span className="font-bold text-lg tracking-tight text-white">Jaegr</span>
               <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800/60 font-semibold">
                 Solana AI
               </span>

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { solanaAddressSchema } from "../mandates/mandate";
 
 /**
- * Valid action types supported by AgentCrashTest.
+ * Valid action types supported by Jaegr.
  */
 export const actionTypeSchema = z.enum([
   "sol_transfer",

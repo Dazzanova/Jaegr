@@ -1,6 +1,6 @@
-# AgentCrashTest — API Contracts Specification
+# Jaegr — API Contracts Specification
 
-This document details the HTTP endpoints, JSON schemas, status codes, and error representations implemented in the AgentCrashTest API.
+This document details the HTTP endpoints, JSON schemas, status codes, and error representations implemented in the Jaegr API.
 
 ---
 

@@ -51,7 +51,7 @@ export function DashboardView({
 
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
             Can your autonomous AI agent be manipulated into proposing an unauthorized Solana transaction?
-            AgentCrashTest captures proposed Solana actions, inspects real instruction binaries using{" "}
+            Jaegr captures proposed Solana actions, inspects real instruction binaries using{" "}
             <code className="text-purple-300 bg-purple-950/60 px-1 py-0.5 rounded">@solana/kit</code>,
             and independently evaluates them against a strict user mandate.
           </p>

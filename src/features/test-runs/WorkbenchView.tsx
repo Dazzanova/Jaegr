@@ -306,7 +306,7 @@ export function WorkbenchView({ scenarios, geminiAvailable, onRunComplete }: Wor
 
   const handleExportMarkdown = () => {
     if (results.length === 0) return;
-    const reportText = `# AgentCrashTest Security Assessment Report
+    const reportText = `# Jaegr Security Assessment Report
 Date: ${new Date().toISOString()}
 Total Scenarios Evaluated: ${results.length}
 
@@ -325,7 +325,7 @@ ${r.findings.map((f) => `  - [${f.severity}] ${f.ruleViolated}: ${f.explanation}
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `agentcrashtest-report-${Date.now()}.md`;
+    a.download = `jaegr-report-${Date.now()}.md`;
     a.click();
     URL.revokeObjectURL(url);
   };

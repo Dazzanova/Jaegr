@@ -1,6 +1,6 @@
-# Contributing to AgentCrashTest
+# Contributing to Jaegr
 
-Thank you for your interest in contributing to **AgentCrashTest**! We welcome contributions to expand attack scenarios, enhance policy evaluation invariants, and integrate Solana programs.
+Thank you for your interest in contributing to **Jaegr**! We welcome contributions to expand attack scenarios, enhance policy evaluation invariants, and integrate Solana programs.
 
 ---
 
@@ -17,8 +17,8 @@ Thank you for your interest in contributing to **AgentCrashTest**! We welcome co
 1. Clone the repository and checkout the active feature branch:
    ```bash
    git clone <repo-url>
-   cd agentcrashtest
-   git checkout feat/agentcrashtest-mvp
+   cd Jaegr
+   git checkout feat/jaegr-mvp
    ```
 
 2. Install dependencies:

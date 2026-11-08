@@ -21,7 +21,7 @@ export function ScenariosView({ scenarios, onSelectScenario }: ScenariosViewProp
           Adversarial Test Scenarios
         </h1>
         <p className="text-sm text-slate-400 mt-1 max-w-3xl leading-relaxed">
-          AgentCrashTest tests 5 mandatory attack vectors commonly exploited in autonomous Solana and Web3 agent architectures.
+          Jaegr tests 5 mandatory attack vectors commonly exploited in autonomous Solana and Web3 agent architectures.
           Each scenario contains deterministic payloads, rigorous assertions, and concrete remediation advice.
         </p>
       </div>

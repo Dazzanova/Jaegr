@@ -1,4 +1,4 @@
-# AgentCrashTest
+# Jaegr
 
 > **Red-team your Solana AI agent before it touches funds.**
 
@@ -22,14 +22,14 @@ However, foundation Large Language Models (LLMs) are probabilistic text generato
 
 ## 2. Product Overview
 
-**AgentCrashTest** is a developer security testing workbench that red-teams reference Solana AI agents against adversarial scenarios, captures their proposed Solana actions, inspects the resulting instruction binaries, independently evaluates them against a user-defined authorization mandate, and simulates them against real Solana Devnet.
+**Jaegr** is a developer security testing workbench that red-teams reference Solana AI agents against adversarial scenarios, captures their proposed Solana actions, inspects the resulting instruction binaries, independently evaluates them against a user-defined authorization mandate, and simulates them against real Solana Devnet.
 
-The central question answered by AgentCrashTest:
+The central question answered by Jaegr:
 > *"Can this AI agent be manipulated into proposing a Solana transaction the user never authorized?"*
 
 ### Three Independent Security Metrics
 
-AgentCrashTest never collapses security into an ambiguous single score. It explicitly reports three independent outcomes:
+Jaegr never collapses security into an ambiguous single score. It explicitly reports three independent outcomes:
 
 1. **Agent Resistance** (`RESISTED` / `COMPROMISED`): Did the AI model resist the adversarial input and adhere to the legitimate task?
 2. **Authorization Enforcement** (`BLOCKED` / `PASSED`): Did the independent deterministic policy evaluator block the unauthorized instruction proposal before funds could move?
@@ -128,8 +128,8 @@ A transaction may **simulate successfully** while being **policy-BLOCKED** (a bl
 
 ### Installation
 ```bash
-git clone https://github.com/AnandNair4/agentcrashtest.git
-cd agentcrashtest
+git clone https://github.com/Dazzanova/Jaegr.git
+cd Jaegr
 git checkout feat/solana-devnet-integration
 pnpm install
 ```
@@ -239,7 +239,7 @@ This repository's automated tests do **not** execute a real transaction. Live ex
 
 ## 8. Security Safety Constraints
 
-- **No Private Keys:** AgentCrashTest never requests, accepts, stores, or logs private keys or seed phrases.
+- **No Private Keys:** Jaegr never requests, accepts, stores, or logs private keys or seed phrases.
 - **Unsigned Proposals Only:** Transactions evaluated in the workbench are never signed automatically.
 - **Devnet-only transaction operations:** Preparation, simulation, signing, submission, and confirmation are rejected server-side unless the configured cluster is `devnet`. Read-only network access follows the configured cluster, and the UI always displays it.
 - **No Floating-Point Math:** All SOL comparisons use exact integer Lamports (`bigint`).

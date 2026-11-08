@@ -139,7 +139,7 @@ export default function Home() {
       <footer className="border-t border-slate-900 bg-slate-950/80 py-6 text-xs text-slate-500 font-mono">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-300">AgentCrashTest</span>
+            <span className="font-bold text-slate-300">Jaegr</span>
             <span>•</span>
             <span>Track: Solana AI</span>
             <span>•</span>

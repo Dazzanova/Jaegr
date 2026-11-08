@@ -11,7 +11,7 @@ export function getSqliteDatabase() {
     return sqliteInstance;
   }
 
-  const dbPath = process.env.DATABASE_PATH || path.resolve(process.cwd(), "data", "agentcrashtest.db");
+  const dbPath = process.env.DATABASE_PATH || path.resolve(process.cwd(), "data", "jaegr.db");
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });

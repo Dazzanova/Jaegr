@@ -122,7 +122,7 @@ export function evaluateInstructionSetPolicy(
           programAddress: decoded.programAddress,
           instructionType: decoded.instructionType
         },
-        explanation: "AgentCrashTest encountered an instruction type that cannot be safely inspected or verified against the mandate. Unknown instructions are rejected by default.",
+        explanation: "Jaegr encountered an instruction type that cannot be safely inspected or verified against the mandate. Unknown instructions are rejected by default.",
         remediation: "Only allow explicit, inspectable program instructions in the agent profile and workbench."
       });
     }

@@ -1,7 +1,7 @@
 /**
  * Simulation Service
  *
- * Implements the core Devnet simulation flow for AgentCrashTest:
+ * Implements the core Devnet simulation flow for Jaegr:
  *   1. Validate and decode the instruction (via adapter, done by caller)
  *   2. Build a valid unsigned transaction
  *   3. Obtain a recent blockhash from Devnet

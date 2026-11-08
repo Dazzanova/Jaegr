@@ -1,4 +1,4 @@
-# AgentCrashTest — Hackathon Demo Script (2–3 Minutes)
+# Jaegr — Hackathon Demo Script (2–3 Minutes)
 
 This script provides a concise, step-by-step presentation walkthrough for judges, technical evaluators, or developers.
 
@@ -11,13 +11,13 @@ This script provides a concise, step-by-step presentation walkthrough for judges
 >
 > If you give an agent direct signing authority, prompt injection means wallet drainage.
 >
-> That's why we built **AgentCrashTest** — an adversarial security testing workbench that red-teams your Solana AI agent before it touches real funds."
+> That's why we built **Jaegr** — an adversarial security testing workbench that red-teams your Solana AI agent before it touches real funds."
 
 ---
 
 ## 2. Core Architecture Invariant (30 Seconds)
 
-> "In developer security, we cannot rely on an ambiguous 1-out-of-100 score. AgentCrashTest strictly distinguishes two outcomes:
+> "In developer security, we cannot rely on an ambiguous 1-out-of-100 score. Jaegr strictly distinguishes two outcomes:
 > 1. **Agent Resistance:** Did the AI model resist the adversarial prompt?
 > 2. **Authorization Enforcement:** Did an independent, zero-trust policy evaluator catch and block the unauthorized Solana instruction?
 >
@@ -69,7 +69,7 @@ This script provides a concise, step-by-step presentation walkthrough for judges
 - Confirm the wallet is connected and reports the `solana:devnet` chain. The server independently rejects any non-Devnet cluster.
 - Click **"Prepare & Simulate"**. This inspects the actual instruction, re-runs the deterministic evaluator, builds the exact unsigned wire transaction, decodes those bytes to prove they still match the inspected proposal, and simulates on Devnet. Nothing is signed.
 - Review the review panel: network, wallet, fee payer, instruction count, program ID, recipient, amount, token mint, account privileges, authorization result, simulation status/logs/compute units, and blockhash validity.
-- Click **"Sign & Submit to Devnet"** and approve the request in your wallet. The signature happens only in the wallet; AgentCrashTest never sees a key.
+- Click **"Sign & Submit to Devnet"** and approve the request in your wallet. The signature happens only in the wallet; Jaegr never sees a key.
 - Explain the trust boundary: after signing, the server decodes the signed wire transaction, requires the signed message bytes to match the prepared message and the fee payer to match the connected wallet, re-decodes the instruction, and **re-runs the deterministic evaluator against the actual signed instruction** before submitting. A tampered recipient, amount, program, or extra instruction is rejected with `409`.
 - The server then simulates the exact signed transaction with signature verification enabled, submits it, and polls for confirmation. A `sendTransaction` response alone is not treated as confirmation.
 - Confirm the returned signature, confirmation slot, and Devnet Solana Explorer link. Open the link and show the real transaction.
@@ -82,7 +82,7 @@ This script provides a concise, step-by-step presentation walkthrough for judges
 
 ## 4. Closing & Impact (15 Seconds)
 
-> "AgentCrashTest provides Solana developers with a tangible harness to harden prompts, stress-test tool schemas, and enforce mathematical runtime guardrails.
+> "Jaegr provides Solana developers with a tangible harness to harden prompts, stress-test tool schemas, and enforce mathematical runtime guardrails.
 >
 > Red-team your Solana AI agent before it touches funds. Thank you!"
 

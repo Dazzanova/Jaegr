@@ -3,7 +3,7 @@ import "./globals.css";
 import { WalletProvider } from "@/lib/wallet/WalletContext";
 
 export const metadata: Metadata = {
-  title: "AgentCrashTest — Red-team your Solana AI agent before it touches funds",
+  title: "Jaegr — Red-team your Solana AI agent before it touches funds",
   description: "A security testing workbench that runs adversarial scenarios against reference Solana AI agents, captures proposed actions, inspects resulting instructions, and evaluates them against user-defined authorization mandates.",
 };
 

@@ -1,10 +1,10 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("AgentCrashTest Workbench E2E Smoke Test", () => {
+test.describe("Jaegr Workbench E2E Smoke Test", () => {
   test("loads dashboard and executes deterministic test run", async ({ page }) => {
     // 1. Open dashboard
     await page.goto("/");
-    await expect(page).toHaveTitle(/AgentCrashTest/);
+    await expect(page).toHaveTitle(/Jaegr/);
 
     // Verify main branding and heading
     await expect(page.getByRole("heading", { name: /Red-team your Solana AI agent/ })).toBeVisible();

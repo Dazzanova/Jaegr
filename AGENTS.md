@@ -1,10 +1,10 @@
-# AGENTS.md — AgentCrashTest Engineering Guidelines
+# AGENTS.md — Jaegr Engineering Guidelines
 
-This document provides instructions and standards for Antigravity and any automated coding agents or engineers contributing to AgentCrashTest.
+This document provides instructions and standards for Antigravity and any automated coding agents or engineers contributing to Jaegr.
 
 ## 1. Project Purpose & Core Architecture
 
-AgentCrashTest is a security testing workbench that red-teams Solana AI agents before they touch funds.
+Jaegr is a security testing workbench that red-teams Solana AI agents before they touch funds.
 
 Key distinction:
 1. **Agent Resistance**: Did the reference agent resist prompt injection or malicious contexts?
@@ -30,7 +30,7 @@ Never collapse these two distinct security metrics into a single ambiguous score
 
 - Official SDK: Prefer `@solana/kit` and `@solana-program/system`.
 - Never ask for, accept, store, or log private keys or seed phrases.
-- Unsigned proposals only: AgentCrashTest generates and inspects instruction proposals, never signs or broadcasts mainnet transactions.
+- Unsigned proposals only: Jaegr generates and inspects instruction proposals, never signs or broadcasts mainnet transactions.
 - Never blindly trust natural language output from an LLM. Decode and inspect the actual Solana instruction structure.
 - Always use the official `SYSTEM_PROGRAM_ADDRESS` constant (`11111111111111111111111111111111`), never arbitrary hardcoded strings without verification.
 - For unknown or unsupported instruction formats, return an explicit `UNSUPPORTED_INSTRUCTION` finding. Never treat uninspected instructions as safe.

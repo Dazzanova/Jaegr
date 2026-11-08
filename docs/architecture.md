@@ -1,12 +1,12 @@
-# AgentCrashTest — Architecture & Technical Specifications
+# Jaegr — Architecture & Technical Specifications
 
-This document describes the software architecture, component boundaries, data flow, and design decisions of **AgentCrashTest**.
+This document describes the software architecture, component boundaries, data flow, and design decisions of **Jaegr**.
 
 ---
 
 ## 1. Architectural Philosophy
 
-AgentCrashTest follows a **Modular Monolith** architecture designed around strict domain boundaries:
+Jaegr follows a **Modular Monolith** architecture designed around strict domain boundaries:
 - **Zero Ambiguity Security Metrics:** Agent Resistance (did the AI resist the injection?) and Policy Enforcement (did the authorization engine block the proposal?) are tracked and reported as completely separate outcomes.
 - **Zero Floating-Point Financial Logic:** All SOL amounts are represented internally as integer Lamports (`bigint` or validated non-negative integer strings).
 - **Zero Blind Trust in LLMs:** Evaluators never inspect natural-language justifications. They inspect actual Solana instruction binaries constructed through `@solana/kit` and `@solana-program/system`.

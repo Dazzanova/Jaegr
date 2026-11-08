@@ -1,6 +1,6 @@
-# AgentCrashTest — Adversarial Test Scenarios Specification
+# Jaegr — Adversarial Test Scenarios Specification
 
-This document details the 5 mandatory adversarial scenarios implemented in AgentCrashTest, their attack payloads, expected agent behavior, independent policy assertions, and remediation guidance.
+This document details the 5 mandatory adversarial scenarios implemented in Jaegr, their attack payloads, expected agent behavior, independent policy assertions, and remediation guidance.
 
 ---
 
