@@ -14,6 +14,12 @@ export interface DecodedWireTransaction {
   signatureCount: number;
 }
 
+/**
+ * ComputeBudget is the only program a wallet may add to a transaction at signing
+ * time (priority fees / compute-unit limits). It cannot move funds.
+ */
+export const COMPUTE_BUDGET_PROGRAM_ADDRESS = "ComputeBudget111111111111111111111111111111";
+
 function decodeWireTransaction(wireTransactionBase64: string, requireSignature: boolean): DecodedWireTransaction {
   const bytes = getBase64Encoder().encode(wireTransactionBase64);
   const transaction = getTransactionDecoder().decode(bytes);
@@ -108,6 +114,97 @@ function describeMessageDifference(expectedBytes: Uint8Array, signedBytes: Uint8
   }
 }
 
+interface NormalizedInstruction {
+  programAddress: string;
+  accounts: string[];
+  dataBase64: string;
+}
+
+interface NormalizedMessage {
+  version: string;
+  lifetimeToken: string;
+  numSignerAccounts: number;
+  numReadonlySignerAccounts: number;
+  instructions: NormalizedInstruction[];
+}
+
+/**
+ * Decodes a compiled message into address-resolved instructions.
+ *
+ * Returns null for address-lookup-table messages (never produced by Jaegr and
+ * not safely comparable) or messages that cannot be decoded.
+ */
+function normalizeCompiledMessage(messageBytes: Uint8Array): NormalizedMessage | null {
+  try {
+    const compiled = getCompiledTransactionMessageDecoder().decode(messageBytes);
+    const lookups = "addressTableLookups" in compiled ? compiled.addressTableLookups : undefined;
+    if (lookups && lookups.length > 0) return null;
+    if (!("instructions" in compiled)) return null;
+
+    const staticAccounts = compiled.staticAccounts;
+    const instructions = compiled.instructions.map((instruction) => ({
+      programAddress: staticAccounts[instruction.programAddressIndex],
+      accounts: (instruction.accountIndices ?? []).map((index) => staticAccounts[index]),
+      dataBase64: Buffer.from(instruction.data ?? new Uint8Array()).toString("base64")
+    }));
+
+    return {
+      version: String(compiled.version),
+      lifetimeToken: String(compiled.lifetimeToken),
+      numSignerAccounts: compiled.header.numSignerAccounts,
+      numReadonlySignerAccounts: compiled.header.numReadonlySignerAccounts,
+      instructions
+    };
+  } catch {
+    return null;
+  }
+}
+
+function sameInstruction(a: NormalizedInstruction, b: NormalizedInstruction): boolean {
+  return (
+    a.programAddress === b.programAddress &&
+    a.dataBase64 === b.dataBase64 &&
+    a.accounts.length === b.accounts.length &&
+    a.accounts.every((account, index) => account === b.accounts[index])
+  );
+}
+
+/**
+ * A wallet may legitimately inject ComputeBudget instructions (priority fee and
+ * compute-unit limit) while signing. Accept that only when every other part of
+ * the message is unchanged: same version, same blockhash, same signer set, and
+ * the exact same non-ComputeBudget instructions in the same order.
+ *
+ * Any other difference — changed recipient, amount, program, account, blockhash,
+ * or an added instruction from any other program — is still rejected.
+ */
+function isWalletPriorityFeeAugmentation(
+  expectedBytes: Uint8Array,
+  signedBytes: Uint8Array
+): boolean {
+  const expected = normalizeCompiledMessage(expectedBytes);
+  const signed = normalizeCompiledMessage(signedBytes);
+  if (!expected || !signed) return false;
+
+  if (expected.version !== signed.version) return false;
+  if (expected.lifetimeToken !== signed.lifetimeToken) return false;
+  if (expected.numSignerAccounts !== signed.numSignerAccounts) return false;
+  if (expected.numReadonlySignerAccounts !== signed.numReadonlySignerAccounts) return false;
+  if (expected.instructions.length === 0) return false;
+
+  const added = signed.instructions.filter(
+    (instruction) => instruction.programAddress === COMPUTE_BUDGET_PROGRAM_ADDRESS
+  );
+  if (added.length === 0) return false;
+
+  const core = signed.instructions.filter(
+    (instruction) => instruction.programAddress !== COMPUTE_BUDGET_PROGRAM_ADDRESS
+  );
+  if (core.length !== expected.instructions.length) return false;
+
+  return core.every((instruction, index) => sameInstruction(instruction, expected.instructions[index]));
+}
+
 export function validateSignedWireTransaction(input: {
   signedWireTransaction: string;
   unsignedWireTransaction: string;
@@ -121,6 +218,10 @@ export function validateSignedWireTransaction(input: {
   }
 
   if (!bytesEqual(expected.messageBytes, signed.messageBytes)) {
+    if (isWalletPriorityFeeAugmentation(expected.messageBytes, signed.messageBytes)) {
+      return signed;
+    }
+
     const diffAt = firstDifference(expected.messageBytes, signed.messageBytes);
     // Diagnostics only: versions, lengths, and byte offsets are public data.
     // They reveal whether the wallet re-encoded the message (e.g. v0 -> legacy)

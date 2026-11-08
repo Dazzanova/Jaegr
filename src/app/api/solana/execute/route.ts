@@ -8,8 +8,8 @@ import { getSolanaClient } from "@/server/solana/client";
 import { getSolanaExplorerUrl, isDevnetConfigured } from "@/server/solana/config";
 import { ExecutionRepository } from "@/server/persistence/repository";
 import { isRateLimited } from "@/server/solana/execution";
-import { validateSignedWireTransaction } from "@/server/solana/transactions/wire";
-import { assertWireMatchesInspected } from "@/server/solana/transactions/decoder";
+import { validateSignedWireTransaction, COMPUTE_BUDGET_PROGRAM_ADDRESS } from "@/server/solana/transactions/wire";
+import { assertWireMatchesInspected, decodeWireTransaction } from "@/server/solana/transactions/decoder";
 import { toJsonSafe } from "@/lib/utils/json";
 
 const requestBodySchema = z.object({
@@ -45,7 +45,8 @@ function getConfirmationIntervalMs(): number {
  * Final, server-authoritative stage of the wallet-approved Devnet lifecycle:
  *   1. decode the exact unsigned wire transaction,
  *   2. re-run the deterministic evaluator against the decoded wire instruction,
- *   3. verify the wallet-signed message is byte-identical to the inspected one,
+ *   3. verify the wallet-signed message matches the inspected one, allowing only
+ *      wallet-injected ComputeBudget priority-fee instructions,
  *   4. simulate with signature verification enabled,
  *   5. submit, wait for confirmation, persist evidence.
  *
@@ -144,7 +145,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── Verify the wallet-signed message is byte-identical ─────────────────────
+  // ── Verify the wallet-signed message (ComputeBudget additions permitted) ───
   let signedDetails;
   try {
     signedDetails = validateSignedWireTransaction({
@@ -160,6 +161,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "Signed transaction fee payer does not match the connected wallet" },
       { status: 409 }
+    );
+  }
+
+  // ── Re-authorize the signed wire itself ────────────────────────────────────
+  // Wallets may add ComputeBudget priority-fee instructions while signing.
+  // Everything else must be identical. Evaluate the actual non-ComputeBudget
+  // instruction that will execute, not a client-supplied summary.
+  let signedInstruction;
+  try {
+    const signedWire = decodeWireTransaction(signedWireTransaction);
+    const core = signedWire.instructions.filter(
+      (instruction) => instruction.programAddress !== COMPUTE_BUDGET_PROGRAM_ADDRESS
+    );
+    if (core.length !== 1) {
+      return NextResponse.json(
+        { error: `Signed transaction must contain exactly one authorized instruction (found ${core.length})` },
+        { status: 409 }
+      );
+    }
+    signedInstruction = core[0];
+    if (
+      signedInstruction.instructionType === "MALFORMED" ||
+      signedInstruction.instructionType === "UNSUPPORTED"
+    ) {
+      return NextResponse.json(
+        { error: "Signed transaction contains an unsupported instruction" },
+        { status: 409 }
+      );
+    }
+  } catch (error: unknown) {
+    return NextResponse.json({ error: errorMessage(error) }, { status: 409 });
+  }
+
+  const signedReport = evaluateTransactionPolicy(mandate, proposal, signedInstruction);
+  if (!signedReport.allowed) {
+    return NextResponse.json(
+      { error: "Unauthorized transaction", findings: signedReport.findings },
+      { status: 403 }
     );
   }
 
@@ -185,8 +224,8 @@ export async function POST(req: NextRequest) {
   try {
     await ExecutionRepository.start(proposal.actionId, {
       feePayerAddress,
-      inspectedProgram: actualInstruction.programAddress,
-      instructionType: actualInstruction.instructionType,
+      inspectedProgram: signedInstruction.programAddress,
+      instructionType: signedInstruction.instructionType,
       signature: signedDetails.signature,
       unsignedWireTransaction,
       signedWireTransaction,

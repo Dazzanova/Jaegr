@@ -53,7 +53,7 @@ Before returning the unsigned transaction, `/api/solana/prepare` decodes its own
 On return, `/api/solana/execute`:
 
 1. decodes the submitted unsigned wire transaction and re-runs the deterministic evaluator against the **wire-decoded** instruction (never a browser verdict);
-2. requires the signed message bytes to be identical to the prepared message and the fee payer to be the connected wallet;
+2. requires the signed message to match the prepared message exactly (the only permitted difference is wallet-injected ComputeBudget priority-fee instructions) and the fee payer to be the connected wallet;
 3. simulates the exact signed transaction with signature verification enabled;
 4. submits only after those checks pass;
 5. polls for confirmation and persists the result.

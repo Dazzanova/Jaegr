@@ -399,7 +399,7 @@ Server-side inspection, deterministic authorization, exact wire-transaction cons
 ## 11. Execute a Wallet-Signed Transaction
 `POST /api/solana/execute`
 
-The server-authoritative final stage. It re-decodes the unsigned wire transaction, re-runs the deterministic evaluator against the actual wire instruction, verifies the signed message is byte-identical to the prepared message and that the fee payer is the expected wallet, simulates the signed transaction with signature verification enabled, then submits and polls for confirmation.
+The server-authoritative final stage. It re-decodes the unsigned wire transaction, re-runs the deterministic evaluator against the actual wire instruction, verifies the signed message matches the prepared message exactly except for wallet-injected ComputeBudget priority-fee instructions, verifies the fee payer is the expected wallet, re-decodes and re-evaluates the signed wire's non-ComputeBudget instruction, simulates the signed transaction with signature verification enabled, then submits and polls for confirmation.
 
 Client-supplied `authorized` or `simulation: SUCCESS` values are ignored.
 

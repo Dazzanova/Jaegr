@@ -6,9 +6,24 @@ import {
   getBase64Encoder,
   getTransactionDecoder,
   getTransactionEncoder,
-  type Blockhash
+  compileTransaction,
+  appendTransactionMessageInstruction,
+  createTransactionMessage,
+  pipe,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash,
+  getBase64EncodedWireTransaction,
+  createNoopSigner,
+  address,
+  lamports,
+  type Blockhash,
+  type TransactionMessage,
+  type TransactionMessageWithFeePayer,
+  type TransactionMessageWithLifetime
 } from "@solana/kit";
+import { getTransferSolInstruction } from "@solana-program/system";
 import { buildTransactionForExecution } from "@/server/solana/transactions/builder";
+import { COMPUTE_BUDGET_PROGRAM_ADDRESS } from "@/server/solana/transactions/wire";
 
 vi.mock("@/server/persistence/repository", () => ({
   ExecutionRepository: {
@@ -82,6 +97,48 @@ function signatureOf(signedWire: string): string {
   const [entry] = Object.entries(transaction.signatures);
   if (!entry?.[1]) throw new Error("missing signature");
   return getBase58Decoder().decode(entry[1]);
+}
+
+/**
+ * Simulates a wallet that injects ComputeBudget priority-fee instructions
+ * while signing the prepared transfer.
+ */
+function addPriorityFeeInstructions(): string {
+  const feePayerAddress = address(FEE_PAYER);
+  const transfer = getTransferSolInstruction({
+    source: createNoopSigner(feePayerAddress),
+    destination: address(RECIPIENT),
+    amount: lamports(1n)
+  });
+  let message: TransactionMessage &
+    TransactionMessageWithFeePayer &
+    TransactionMessageWithLifetime = pipe(
+    createTransactionMessage({ version: 0 }),
+    (tx) => setTransactionMessageFeePayer(feePayerAddress, tx),
+    (tx) =>
+      setTransactionMessageLifetimeUsingBlockhash(
+        { blockhash: BLOCKHASH as Blockhash, lastValidBlockHeight: 1n },
+        tx
+      ),
+    (tx) => appendTransactionMessageInstruction(transfer, tx)
+  );
+  for (const data of [
+    new Uint8Array([2, 0x40, 0x42, 0x0f, 0x00]),
+    new Uint8Array([3, 0xe8, 0x03, 0, 0, 0, 0, 0, 0])
+  ]) {
+    message = appendTransactionMessageInstruction(
+      { programAddress: address(COMPUTE_BUDGET_PROGRAM_ADDRESS), accounts: [], data },
+      message
+    );
+  }
+  const wire = getBase64EncodedWireTransaction(compileTransaction(message));
+  const transaction = getTransactionDecoder().decode(getBase64Encoder().encode(wire));
+  const feePayer = Object.keys(transaction.signatures)[0];
+  const signed = {
+    ...transaction,
+    signatures: { ...transaction.signatures, [feePayer]: new Uint8Array(64).fill(3) }
+  };
+  return getBase64Decoder().decode(getTransactionEncoder().encode(signed));
 }
 
 function request(body: unknown): NextRequest {
@@ -191,6 +248,30 @@ describe("POST /api/solana/execute", () => {
 
     expect(response.status).toBe(409);
     expect((await response.json()).error).toMatch(/message differs/);
+  });
+
+  it("accepts wallet-injected ComputeBudget priority-fee instructions", async () => {
+    const wire = makeWire();
+    const signedWithPriorityFee = addPriorityFeeInstructions();
+    const client = mockClient({
+      sendWireTransaction: vi.fn().mockResolvedValue(signatureOf(signedWithPriorityFee))
+    });
+
+    const response = await POST(
+      request(bodyFor(wire, { signedWireTransaction: signedWithPriorityFee }))
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).status).toBe("CONFIRMED");
+    expect(client.simulateSignedWireTransaction).toHaveBeenCalledWith(signedWithPriorityFee);
+    expect(client.sendWireTransaction).toHaveBeenCalledWith(signedWithPriorityFee);
+    expect(vi.mocked(ExecutionRepository.start)).toHaveBeenCalledWith(
+      "ACT-EXECUTE-TEST",
+      expect.objectContaining({
+        inspectedProgram: "11111111111111111111111111111111",
+        instructionType: "SYSTEM_TRANSFER"
+      })
+    );
   });
 
   it("rejects a signed transaction from a different fee payer", async () => {
