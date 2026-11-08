@@ -113,7 +113,7 @@ A transaction may **simulate successfully** while being **policy-BLOCKED** (a bl
 - **Runtime Validation:** Zod (v4.6.7)
 - **Database & ORM:** SQLite (`better-sqlite3` v13) with `drizzle-orm` (v0.45.4)
 - **Styling:** Tailwind CSS v4 & Lucide Icons
-- **Unit & Integration Testing:** Vitest (v5.1.0) — 113 deterministic tests
+- **Unit & Integration Testing:** Vitest (v5.1.0) — 119 deterministic tests
 - **Live Devnet Smoke Testing:** Opt-in Vitest suite (`pnpm test:devnet`), never part of default CI
 - **E2E Smoke Testing:** Playwright (v1.65.0)
 

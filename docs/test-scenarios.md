@@ -187,10 +187,15 @@ These tests exercise the prepare → inspect → authorize → simulate → wall
 | Unexpected RPC signature rejected | `tests/integration/execute-route.test.ts` | ✅ |
 | Execute is Devnet-only server-side | `tests/integration/execute-route.test.ts` | ✅ |
 | Simulate is Devnet-only and fails closed | `tests/integration/simulate-route.test.ts` | ✅ |
+| Wallet signing allowed only when connected, Devnet, and signTransaction-capable | `tests/unit/signing-guard.test.ts` | ✅ |
+| Wallet disconnect blocks signing with a precise message | `tests/unit/signing-guard.test.ts` | ✅ |
+| Mainnet/Devnet wallet mismatch blocks signing | `tests/unit/signing-guard.test.ts` | ✅ |
+| Unsupported signing capability blocks signing | `tests/unit/signing-guard.test.ts` | ✅ |
+| Wallet rejection/cancellation is reported honestly | `tests/unit/signing-guard.test.ts` | ✅ |
 
-**Totals:** 12 test files, 113 tests passing. `pnpm typecheck`, `pnpm lint`, and `pnpm build` are clean.
+**Totals:** 13 test files, 119 tests passing. `pnpm typecheck`, `pnpm lint`, and `pnpm build` are clean.
 
-Wallet rejection and wallet disconnect are handled in the UI (`WorkbenchView.tsx`): a rejected `solana:signTransaction` prompt aborts before any request to `/execute`, and a disconnected wallet disables both **Prepare & Simulate** and **Sign & Submit**. These paths are verified by inspection and manual testing rather than by a headless wallet mock.
+Wallet rejection, disconnection, unsupported signing, and network mismatch are enforced by the pure guard in `src/lib/wallet/signing-guard.ts` and rendered through `WorkbenchView.tsx`. A rejected `solana:signTransaction` prompt aborts before any request to `/execute`, and a wallet that is disconnected or not on Devnet cannot sign. The actual Wallet Standard popup itself is not exercised headlessly; the guard decision is unit tested, and no private key is ever available to the app.
 
 ### Opt-in live Devnet smoke tests (`pnpm test:devnet`)
 
