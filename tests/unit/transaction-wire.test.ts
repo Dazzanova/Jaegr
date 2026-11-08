@@ -60,7 +60,7 @@ describe("signed wire transaction validation", () => {
     expect(result.signature.length).toBeLessThanOrEqual(88);
   });
 
-  it("rejects a modified transaction message", () => {
+  it("reports a modified transaction message", () => {
     const unsignedWireTransaction = makeUnsignedWire();
     const signedWireTransaction = signWithPlaceholder(unsignedWireTransaction);
     const modifiedBytes = Uint8Array.from(getBase64Encoder().encode(signedWireTransaction));
@@ -71,7 +71,7 @@ describe("signed wire transaction validation", () => {
       signedWireTransaction: modifiedWire,
       unsignedWireTransaction,
       expectedFeePayer: FEE_PAYER
-    })).toThrow(/message differs/);
+    })).toThrow(/expected v0\/\d+B, received v0\/\d+B, first difference at byte \d+/);
   });
 
   it("rejects an unsigned wallet response", () => {

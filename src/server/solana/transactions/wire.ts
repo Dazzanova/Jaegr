@@ -2,6 +2,7 @@ import {
   bytesEqual,
   getBase64Encoder,
   getBase58Decoder,
+  getCompiledTransactionMessageDecoder,
   getTransactionDecoder,
   type Base64EncodedWireTransaction
 } from "@solana/kit";
@@ -34,6 +35,79 @@ function decodeWireTransaction(wireTransactionBase64: string, requireSignature: 
   };
 }
 
+function describeMessage(messageBytes: Uint8Array): string {
+  const versionByte = messageBytes[0] ?? 0;
+  const version = (versionByte & 0x80) !== 0 ? `v${versionByte & 0x7f}` : "legacy";
+  return `${version}/${messageBytes.length}B`;
+}
+
+function firstDifference(a: Uint8Array, b: Uint8Array): number {
+  const limit = Math.min(a.length, b.length);
+  for (let i = 0; i < limit; i += 1) {
+    if (a[i] !== b[i]) return i;
+  }
+  return a.length === b.length ? -1 : limit;
+}
+
+type InstructionLike = {
+  programAddressIndex: number;
+  accountIndices?: readonly number[];
+  data?: Uint8Array | readonly number[];
+};
+
+function instructionSignature(instruction: InstructionLike | undefined): string {
+  if (!instruction) return "none";
+  return `${instruction.programAddressIndex}:${(instruction.accountIndices ?? []).join(",")}:${Buffer.from(instruction.data ?? new Uint8Array()).toString("base64")}`;
+}
+
+/**
+ * Explains which part of the message changed. Never returns the whole message;
+ * only public fields (version, blockhash, account list, instruction summary).
+ */
+function describeMessageDifference(expectedBytes: Uint8Array, signedBytes: Uint8Array): string {
+  try {
+    const expected = getCompiledTransactionMessageDecoder().decode(expectedBytes);
+    const signed = getCompiledTransactionMessageDecoder().decode(signedBytes);
+    const changes: string[] = [];
+
+    if (expected.version !== signed.version) {
+      changes.push(`version ${expected.version} -> ${signed.version}`);
+    }
+    if (String(expected.lifetimeToken) !== String(signed.lifetimeToken)) {
+      changes.push("recent blockhash changed");
+    }
+    if (expected.staticAccounts.join(",") !== signed.staticAccounts.join(",")) {
+      changes.push("account list changed");
+    }
+    const expectedInstructions = "instructions" in expected ? expected.instructions : [];
+    const signedInstructions = "instructions" in signed ? signed.instructions : [];
+    if (
+      instructionSignature(
+        expectedInstructions[0] as InstructionLike | undefined
+      ) !==
+      instructionSignature(
+        signedInstructions[0] as InstructionLike | undefined
+      )
+    ) {
+      changes.push("instruction changed");
+    }
+    if (expectedInstructions.length !== signedInstructions.length) {
+      changes.push(`instruction count ${expectedInstructions.length} -> ${signedInstructions.length}`);
+    }
+    const addressLookups = (message: typeof expected) =>
+      "addressTableLookups" in message ? JSON.stringify(message.addressTableLookups) : "none";
+    if (addressLookups(expected) !== addressLookups(signed)) {
+      changes.push("address lookup tables changed");
+    }
+
+    return changes.length > 0
+      ? changes.join(", ")
+      : "message content is semantically identical (possible re-encoding)";
+  } catch {
+    return "message could not be decoded for a detailed comparison";
+  }
+}
+
 export function validateSignedWireTransaction(input: {
   signedWireTransaction: string;
   unsignedWireTransaction: string;
@@ -47,7 +121,16 @@ export function validateSignedWireTransaction(input: {
   }
 
   if (!bytesEqual(expected.messageBytes, signed.messageBytes)) {
-    throw new Error("Signed transaction message differs from the inspected proposal");
+    const diffAt = firstDifference(expected.messageBytes, signed.messageBytes);
+    // Diagnostics only: versions, lengths, and byte offsets are public data.
+    // They reveal whether the wallet re-encoded the message (e.g. v0 -> legacy)
+    // or changed its content (blockhash, accounts, instruction data).
+    throw new Error(
+      `Signed transaction message differs from the inspected proposal ` +
+        `(expected ${describeMessage(expected.messageBytes)}, ` +
+        `received ${describeMessage(signed.messageBytes)}, first difference at byte ${diffAt}: ` +
+        `${describeMessageDifference(expected.messageBytes, signed.messageBytes)})`
+    );
   }
 
   return signed;
