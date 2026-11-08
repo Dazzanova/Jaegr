@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "./db";
-import { testRunsTable, mandatesTable, TestRunRecord } from "./schema";
+import { testRunsTable, mandatesTable, executionsTable, TestRunRecord, ExecutionRecord } from "./schema";
 import { ScenarioTestResult } from "../orchestration/runner";
 import { SimulationResult } from "../solana/simulation/service";
 import { AuthorizationMandate, authorizationMandateSchema } from "@/domain/mandates/mandate";
@@ -204,5 +204,47 @@ export class MandateRepository {
       permittedActionTypes: JSON.parse(r.permittedActionsJson),
       seenActionIds: JSON.parse(r.seenActionIdsJson)
     });
+  }
+}
+
+export type ExecutionStatus = "PENDING" | "SUBMITTED" | "CONFIRMED" | "FAILED" | "UNKNOWN";
+
+export class ExecutionRepository {
+  static async get(actionId: string): Promise<ExecutionRecord | null> {
+    const db = getDb();
+    const records = await db.select().from(executionsTable).where(eq(executionsTable.actionId, actionId)).limit(1);
+    return records[0] ?? null;
+  }
+
+  static async start(actionId: string, evidence: Record<string, unknown>): Promise<ExecutionRecord> {
+    const db = getDb();
+    const now = new Date().toISOString();
+    await db.insert(executionsTable).values({
+      actionId,
+      status: "PENDING",
+      evidenceJson: safeJsonStringify(evidence),
+      createdAt: now,
+      updatedAt: now
+    });
+    const record = await this.get(actionId);
+    if (!record) throw new Error("Failed to persist execution evidence");
+    return record;
+  }
+
+  static async update(
+    actionId: string,
+    values: { status: ExecutionStatus; signature?: string; slot?: string; error?: string; evidence?: Record<string, unknown> }
+  ): Promise<void> {
+    const db = getDb();
+    const existing = await this.get(actionId);
+    if (!existing) throw new Error(`Execution '${actionId}' was not initialized`);
+    await db.update(executionsTable).set({
+      status: values.status,
+      signature: values.signature,
+      slot: values.slot,
+      error: values.error,
+      evidenceJson: values.evidence ? safeJsonStringify(values.evidence) : existing.evidenceJson,
+      updatedAt: new Date().toISOString()
+    }).where(eq(executionsTable.actionId, actionId));
   }
 }

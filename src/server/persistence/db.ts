@@ -58,6 +58,17 @@ export function getSqliteDatabase() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS executions (
+      action_id TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      signature TEXT,
+      slot TEXT,
+      error TEXT,
+      evidence_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   // Safe schema migration: add simulation_json if it doesn't exist yet.

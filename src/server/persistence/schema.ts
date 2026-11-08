@@ -43,7 +43,19 @@ export const mandatesTable = sqliteTable("mandates", {
   updatedAt: text("updated_at").notNull()
 });
 
+export const executionsTable = sqliteTable("executions", {
+  actionId: text("action_id").primaryKey(),
+  status: text("status").notNull(),
+  signature: text("signature"),
+  slot: text("slot"),
+  error: text("error"),
+  evidenceJson: text("evidence_json").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull()
+});
+
 export type TestRunRecord = typeof testRunsTable.$inferSelect;
 export type NewTestRunRecord = typeof testRunsTable.$inferInsert;
 export type MandateRecord = typeof mandatesTable.$inferSelect;
 export type NewMandateRecord = typeof mandatesTable.$inferInsert;
+export type ExecutionRecord = typeof executionsTable.$inferSelect;
