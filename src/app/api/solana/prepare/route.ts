@@ -9,6 +9,7 @@ import { isDevnetConfigured } from "@/server/solana/config";
 import { buildTransactionForExecution } from "@/server/solana/transactions/builder";
 import { assertWireMatchesInspected } from "@/server/solana/transactions/decoder";
 import { isRateLimited } from "@/server/solana/execution";
+import { toJsonSafe } from "@/lib/utils/json";
 
 const requestBodySchema = z.object({
   proposal: actionProposalSchema,
@@ -55,7 +56,9 @@ export async function POST(req: NextRequest) {
   }
 
   const { proposal, mandate, feePayerAddress } = parsed.data;
-  const { decoded } = SolanaInstructionAdapter.processProposal(proposal);
+  const { decoded } = SolanaInstructionAdapter.processProposal(proposal, {
+    sourceAddress: feePayerAddress
+  });
   const report = evaluateTransactionPolicy(mandate, proposal, decoded);
 
   if (!report.allowed) {
@@ -116,7 +119,7 @@ export async function POST(req: NextRequest) {
           status: simulation.err ? "EXECUTION_FAILED" : "SUCCESS",
           logs: simulation.logs ?? [],
           unitsConsumed: simulation.unitsConsumed?.toString(),
-          err: simulation.err ?? null,
+          err: toJsonSafe(simulation.err ?? null),
           timestamp: new Date().toISOString()
         }
       });

@@ -10,6 +10,7 @@ import { ExecutionRepository } from "@/server/persistence/repository";
 import { isRateLimited } from "@/server/solana/execution";
 import { validateSignedWireTransaction } from "@/server/solana/transactions/wire";
 import { assertWireMatchesInspected } from "@/server/solana/transactions/decoder";
+import { toJsonSafe } from "@/lib/utils/json";
 
 const requestBodySchema = z.object({
   proposal: actionProposalSchema,
@@ -112,7 +113,9 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Inspect the proposal-derived instruction ───────────────────────────────
-  const { decoded } = SolanaInstructionAdapter.processProposal(proposal);
+  const { decoded } = SolanaInstructionAdapter.processProposal(proposal, {
+    sourceAddress: feePayerAddress
+  });
   const proposalReport = evaluateTransactionPolicy(mandate, proposal, decoded);
   if (!proposalReport.allowed) {
     return NextResponse.json(
@@ -167,7 +170,7 @@ export async function POST(req: NextRequest) {
     const simulation = await client.simulateSignedWireTransaction(signedWireTransaction);
     if (simulation.err) {
       return NextResponse.json(
-        { error: "Signed transaction simulation failed", simulation },
+        { error: "Signed transaction simulation failed", simulation: toJsonSafe(simulation) },
         { status: 422 }
       );
     }

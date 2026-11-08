@@ -136,7 +136,9 @@ export class ScenarioTestRunner {
       status: "info"
     });
 
-    const { decoded } = SolanaInstructionAdapter.processProposal(agentResult.proposal);
+    const { decoded } = SolanaInstructionAdapter.processProposal(agentResult.proposal, {
+      sourceAddress: options.feePayerAddress
+    });
 
     timeline.push({
       step: "SOLANA_DECODED",

@@ -20,6 +20,15 @@ export interface SolanaInstructionResult {
   rawInstruction?: unknown;
 }
 
+export interface ProcessProposalOptions {
+  /**
+   * The wallet that will sign and pay for the transaction. When provided, it is
+   * used as the transfer source/authority so the inspected instruction matches
+   * the actual wire transaction instead of the placeholder demo wallet.
+   */
+  sourceAddress?: string;
+}
+
 /**
  * Solana Adapter:
  * Takes an agent's ActionProposal, generates the corresponding Solana instruction structure,
@@ -37,7 +46,10 @@ export class SolanaInstructionAdapter {
   /**
    * Constructs and inspects a Solana instruction from an ActionProposal.
    */
-  static processProposal(proposal: ActionProposal): SolanaInstructionResult {
+  static processProposal(
+    proposal: ActionProposal,
+    options: ProcessProposalOptions = {}
+  ): SolanaInstructionResult {
     // ── 1. System Program SOL transfer ───────────────────────────────────────
     if (proposal.actionType === "sol_transfer") {
       const recipientStr = proposal.parameters.recipient;
@@ -56,7 +68,9 @@ export class SolanaInstructionAdapter {
 
       try {
         const destAddress = address(recipientStr);
-        const sourceAddress = address(proposal.parameters.rawAccounts?.[0] || DEFAULT_SOURCE_WALLET);
+        const sourceAddress = address(
+          options.sourceAddress || proposal.parameters.rawAccounts?.[0] || DEFAULT_SOURCE_WALLET
+        );
         const amountBigInt = BigInt(lamportsStr);
         const transferAmount = lamports(amountBigInt);
 
@@ -113,7 +127,8 @@ export class SolanaInstructionAdapter {
       const sourceStr = proposal.parameters.sourceAccount || proposal.parameters.rawAccounts?.[0];
       const decimals = proposal.parameters.tokenDecimals;
       // Authority is typically index 1 in rawAccounts or falls back to the source
-      const authorityStr = proposal.parameters.rawAccounts?.[1] || sourceStr;
+      const authorityStr =
+        options.sourceAddress || proposal.parameters.rawAccounts?.[1] || sourceStr;
 
       if (!destinationStr || !tokenAmountStr || !tokenMintStr || !sourceStr || decimals === undefined) {
         return {

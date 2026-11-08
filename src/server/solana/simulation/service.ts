@@ -20,6 +20,7 @@ import { getSolanaClient } from "../client";
 import { isDevnetConfigured } from "../config";
 import { buildTransactionForSimulation } from "../transactions/builder";
 import { DecodedInstruction } from "@/domain/actions/proposal";
+import { stringifyJsonSafe } from "@/lib/utils/json";
 
 /**
  * Four-state simulation outcome — never collapse into a single boolean.
@@ -134,7 +135,7 @@ export class SimulationService {
           err: simResult.err,
           timestamp,
           durationMs,
-          errorMessage: `Transaction execution failed during simulation: ${JSON.stringify(simResult.err)}`
+          errorMessage: `Transaction execution failed during simulation: ${stringifyJsonSafe(simResult.err)}`
         };
       }
 

@@ -123,7 +123,8 @@ export function WorkbenchView({ scenarios, geminiAvailable, onRunComplete }: Wor
             scenarioIds,
             profileType: "vulnerable",
             provider,
-            mandate: customMandate
+            mandate: customMandate,
+            feePayerAddress: publicKey || undefined
           })
         });
 
@@ -134,7 +135,8 @@ export function WorkbenchView({ scenarios, geminiAvailable, onRunComplete }: Wor
             scenarioIds,
             profileType: "hardened",
             provider,
-            mandate: customMandate
+            mandate: customMandate,
+            feePayerAddress: publicKey || undefined
           })
         });
 
@@ -157,7 +159,8 @@ export function WorkbenchView({ scenarios, geminiAvailable, onRunComplete }: Wor
             scenarioIds,
             profileType,
             provider,
-            mandate: customMandate
+            mandate: customMandate,
+            feePayerAddress: publicKey || undefined
           })
         });
 
@@ -202,6 +205,10 @@ export function WorkbenchView({ scenarios, geminiAvailable, onRunComplete }: Wor
   const handlePrepareExecution = async () => {
     const run = results.find((candidate) => candidate.runId === selectedExecutionRunId);
     if (!run || !publicKey || !connectedWallet || !isDevnet) return;
+    if (run.policyEnforcementVerdict !== "PASSED") {
+      setExecutionStatus("This proposal is BLOCKED by the mandate policy and cannot be executed");
+      return;
+    }
     setIsPreparing(true);
     setExecutionStatus("Preparing and simulating on Devnet...");
     setExecutionResult(null);
@@ -331,6 +338,7 @@ ${r.findings.map((f) => `  - [${f.severity}] ${f.ruleViolated}: ${f.explanation}
   };
 
   const selectedExecutionRun = results.find((candidate) => candidate.runId === selectedExecutionRunId) ?? null;
+  const selectedRunIsExecutable = selectedExecutionRun?.policyEnforcementVerdict === "PASSED";
   const hasUnresolvedSubmission =
     executionResult?.status === "SUBMITTED" || executionResult?.status === "UNKNOWN";
   const preparedIsCurrent = preparedExecution?.inputKey === executionInputKey;
@@ -739,6 +747,15 @@ ${r.findings.map((f) => `  - [${f.severity}] ${f.ruleViolated}: ${f.explanation}
           </div>
         )}
 
+        {selectedExecutionRun && !selectedRunIsExecutable && (
+          <div className="rounded border border-rose-900/60 bg-rose-950/20 p-3 text-xs text-rose-300">
+            This proposal was <span className="font-semibold">BLOCKED</span> by the independent mandate policy,
+            so it cannot be executed. That is the security control working as intended — not a wallet or Devnet problem.
+            Run the <span className="font-semibold text-slate-200">Hardened Solana Sentinel</span> profile and select a
+            proposal whose Mandate Policy is <span className="font-semibold text-emerald-300">PASSED</span>.
+          </div>
+        )}
+
         {/* Exact prepared transaction review */}
         {preparedExecution && preparedIsCurrent && (
           <div
@@ -856,6 +873,7 @@ ${r.findings.map((f) => `  - [${f.severity}] ${f.ruleViolated}: ${f.explanation}
             onClick={handlePrepareExecution}
             disabled={
               !selectedExecutionRunId ||
+              !selectedRunIsExecutable ||
               !publicKey ||
               !connectedWallet ||
               !isDevnet ||
