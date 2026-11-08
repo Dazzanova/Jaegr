@@ -202,7 +202,7 @@ Wallet rejection and wallet disconnect are handled in the UI (`WorkbenchView.tsx
 - Real account info for the System Program.
 - Real Devnet simulation of an unsigned instruction (status must be a genuine `SUCCESS`, `EXECUTION_FAILED`, or `RPC_ERROR`).
 
-**Status: not run.** Running this suite requires network access and is not claimed as verified.
+**Status: run read-only on 2026-11-08.** 5/5 passed against `https://api.devnet.solana.com`. The unsigned simulation returned a genuine `EXECUTION_FAILED` with `AccountNotFound` for the nonexistent dummy source account — evidence that the result came from the network rather than a fabricated `SUCCESS`. No transaction was signed or submitted.
 
 ### Manual wallet verification
 
