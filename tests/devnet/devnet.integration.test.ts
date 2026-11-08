@@ -34,7 +34,8 @@ describe.runIf(runDevnet)("live Solana Devnet smoke tests", () => {
 
   it("fetches a real recent blockhash", async () => {
     const blockhash = await client.getLatestBlockhash();
-    expect(blockhash.blockhash).toHaveLength(32);
+    // A blockhash is a base58-encoded 32-byte value (43–44 characters).
+    expect(blockhash.blockhash).toMatch(/^[1-9A-HJ-NP-Za-km-z]{43,44}$/);
     expect(blockhash.lastValidBlockHeight).toBeGreaterThan(0n);
   });
 
