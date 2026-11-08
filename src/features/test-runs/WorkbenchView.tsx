@@ -20,16 +20,17 @@ import { describeWalletSigningError } from "@/lib/wallet/signing-guard";
 
 interface WorkbenchViewProps {
   scenarios: ScenarioItem[];
+  groqAvailable: boolean;
   geminiAvailable: boolean;
   onRunComplete?: () => void;
 }
 
-export function WorkbenchView({ scenarios, geminiAvailable, onRunComplete }: WorkbenchViewProps) {
+export function WorkbenchView({ scenarios, groqAvailable, geminiAvailable, onRunComplete }: WorkbenchViewProps) {
   const { publicKey, connectedWallet, isDevnet, signTransaction } = useWallet();
   // Config state
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>("ALL");
   const [profileType, setProfileType] = useState<"vulnerable" | "hardened">("vulnerable");
-  const [provider, setProvider] = useState<"deterministic-demo" | "gemini">("deterministic-demo");
+  const [provider, setProvider] = useState<"deterministic-demo" | "groq" | "gemini">("deterministic-demo");
   const [compareMode, setCompareMode] = useState<boolean>(false);
 
   // Mandate configuration state
@@ -433,6 +434,34 @@ ${r.findings.map((f) => `  - [${f.severity}] ${f.ruleViolated}: ${f.explanation}
                     <span className="text-xs font-semibold text-white block">Deterministic Demo Mode (Offline)</span>
                     <span className="text-[11px] text-slate-400 block">
                       Guaranteed reproducible evaluation. Zero external network calls or keys.
+                    </span>
+                  </div>
+                </label>
+
+                <label
+                  className={`flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-800 bg-slate-950 cursor-pointer ${
+                    !groqAvailable ? "opacity-60" : ""
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="provider"
+                    value="groq"
+                    checked={provider === "groq"}
+                    onChange={() => setProvider("groq")}
+                    className="mt-0.5 text-purple-600"
+                  />
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold text-white">Groq (openai/gpt-oss-120b)</span>
+                      {groqAvailable ? (
+                        <Badge variant="success">Configured</Badge>
+                      ) : (
+                        <Badge variant="warning">No API Key</Badge>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-slate-400 block">
+                      Live JSON-mode inference via Groq. Per-minute free-tier limits; no daily cap.
                     </span>
                   </div>
                 </label>

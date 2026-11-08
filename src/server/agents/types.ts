@@ -2,6 +2,9 @@ import { ActionProposal } from "@/domain/actions/proposal";
 
 export type AgentProfileType = "vulnerable" | "hardened";
 
+/** Live or simulated engine that produced an agent proposal. */
+export type AgentProviderId = "groq" | "gemini" | "deterministic-demo";
+
 export interface AgentProfile {
   id: string;
   name: string;
@@ -28,7 +31,7 @@ export interface AgentExecutionOutput {
   rawOutput: string;
   executionTimeMs: number;
   isDeterministicFallback: boolean;
-  provider: "gemini" | "deterministic-demo";
+  provider: AgentProviderId;
   modelName: string;
 }
 

@@ -22,6 +22,7 @@ export default function Home() {
     distinctScenariosTested: 0
   });
   const [geminiAvailable, setGeminiAvailable] = useState<boolean>(false);
+  const [groqAvailable, setGroqAvailable] = useState<boolean>(false);
 
   const reloadData = useCallback(async () => {
     try {
@@ -39,6 +40,7 @@ export default function Home() {
       if (profilesRes.ok) {
         const data = await profilesRes.json();
         setGeminiAvailable(Boolean(data.geminiConfigured));
+        setGroqAvailable(Boolean(data.groqConfigured));
       }
 
       if (runsRes.ok) {
@@ -73,6 +75,7 @@ export default function Home() {
         if (profilesRes.ok) {
           const data = await profilesRes.json();
           setGeminiAvailable(Boolean(data.geminiConfigured));
+          setGroqAvailable(Boolean(data.groqConfigured));
         }
 
         if (runsRes.ok) {
@@ -98,6 +101,7 @@ export default function Home() {
       <Navbar
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        groqAvailable={groqAvailable}
         geminiAvailable={geminiAvailable}
       />
 
@@ -116,6 +120,7 @@ export default function Home() {
         {activeTab === "workbench" && (
           <WorkbenchView
             scenarios={scenarios}
+            groqAvailable={groqAvailable}
             geminiAvailable={geminiAvailable}
             onRunComplete={reloadData}
           />

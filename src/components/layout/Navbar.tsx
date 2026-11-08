@@ -10,9 +10,10 @@ interface NavbarProps {
   activeTab: "dashboard" | "workbench" | "scenarios" | "history";
   onTabChange: (tab: "dashboard" | "workbench" | "scenarios" | "history") => void;
   geminiAvailable?: boolean;
+  groqAvailable?: boolean;
 }
 
-export function Navbar({ activeTab, onTabChange, geminiAvailable }: NavbarProps) {
+export function Navbar({ activeTab, onTabChange, geminiAvailable, groqAvailable }: NavbarProps) {
   return (
     <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
@@ -89,9 +90,14 @@ export function Navbar({ activeTab, onTabChange, geminiAvailable }: NavbarProps)
           {/* Devnet network status — real RPC health */}
           <NetworkStatusBadge />
 
-          {/* Gemini availability */}
+          {/* Live-provider availability */}
           <div className="hidden lg:block">
-            {geminiAvailable ? (
+            {groqAvailable ? (
+              <Badge variant="success">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Groq Live
+              </Badge>
+            ) : geminiAvailable ? (
               <Badge variant="success">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Gemini Live

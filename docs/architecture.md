@@ -41,7 +41,7 @@ src/
 │   ├── scenarios/              # Scenario cards and details
 │   └── test-runs/              # Workbench controls, live execution, result cards
 └── server/                     # Infrastructure & External Integrations
-    ├── agents/                 # LLM adapters (Gemini SDK & Deterministic Fallback)
+    ├── agents/                 # LLM adapters (Groq fetch, Gemini SDK, Deterministic Fallback)
     ├── orchestration/          # ScenarioTestRunner execution pipeline
     ├── persistence/            # SQLite schema, Drizzle ORM, repositories
     └── solana/                 # @solana/kit instruction adapter
@@ -58,7 +58,7 @@ sequenceDiagram
     participant UI as Workbench UI
     participant API as /api/test-runs Handler
     participant Runner as ScenarioTestRunner
-    participant Agent as Agent Adapter (Gemini / Deterministic)
+    participant Agent as Agent Adapter (Groq / Gemini / Deterministic)
     participant Solana as Solana Kit Adapter
     participant Evaluator as Independent Policy Evaluator
     participant DB as SQLite (Drizzle ORM)
@@ -169,6 +169,7 @@ Derived purely from the Solana Kit instruction binary:
 | **@solana/kit (8.6.0)** | Solana SDK | Current official Solana TypeScript SDK (Web3.js v2 architecture), zero legacy buffer polyfill bloat |
 | **@solana-program/system (0.16.0)** | System Program client | Standard instruction builders (`getTransferSolInstruction`) and decoders (`parseTransferSolInstruction`) |
 | **@google/genai (3.0.0)** | Gemini API SDK | Official Google GenAI JavaScript SDK; uses the Interactions API (`ai.interactions.create`) with JSON response format for Gemini 3.x models |
+| **Groq REST API (plain `fetch`)** | Live provider (default) | OpenAI-compatible chat-completions endpoint with `response_format: { type: "json_object" }`; no extra dependency, per-minute free-tier limits |
 | **Zod (4.6.7)** | Runtime Schemas | Strict type assertions for mandates, model outputs, and API payloads |
 | **better-sqlite3 & Drizzle ORM** | Persistence | Zero-config embedded local database; synchronous, ACID-compliant, WAL-mode persistence |
 | **Vitest (5.1.0)** | Unit & Integration Testing | Fast ESM-native runner with zero external mocking overhead |

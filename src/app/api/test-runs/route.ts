@@ -12,7 +12,7 @@ const runTestSchema = z.object({
   scenarioId: z.string().optional(),
   scenarioIds: z.array(z.string()).optional(),
   profileType: z.enum(["vulnerable", "hardened"]).default("vulnerable"),
-  provider: z.enum(["gemini", "deterministic-demo"]).default("deterministic-demo"),
+  provider: z.enum(["groq", "gemini", "deterministic-demo"]).default("deterministic-demo"),
   mandate: z
     .object({
       id: z.string().default(() => `mandate-${Date.now()}`),

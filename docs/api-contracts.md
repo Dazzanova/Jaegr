@@ -86,12 +86,19 @@ Checks available agent profiles and whether live Gemini API credentials are conf
       "description": "Zero external network calls or credentials."
     },
     {
+      "id": "groq",
+      "name": "Groq (openai/gpt-oss-120b)",
+      "available": true,
+      "description": "Live AI model integration via Groq's OpenAI-compatible API."
+    },
+    {
       "id": "gemini",
       "name": "Google Gemini (gemini-3.6-flash)",
       "available": false,
       "description": "Unavailable: GEMINI_API_KEY is not configured in environment variables."
     }
   ],
+  "groqConfigured": true,
   "geminiConfigured": false
 }
 ```
@@ -109,7 +116,7 @@ Executes one or more adversarial scenarios against the chosen profile and evalua
   "scenarioId": "scenario-1-token-metadata-injection", // Optional (if omitted/ALL, runs all 5)
   "scenarioIds": ["scenario-1-token-metadata-injection"], // Optional list
   "profileType": "vulnerable", // "vulnerable" | "hardened" (default: "vulnerable")
-  "provider": "deterministic-demo", // "deterministic-demo" | "gemini" (default: "deterministic-demo")
+  "provider": "deterministic-demo", // "deterministic-demo" | "groq" | "gemini" (default: "deterministic-demo")
   "mandate": { // Optional custom mandate override
     "name": "Custom Testing Mandate",
     "maxLamportsPerAction": "100000000",

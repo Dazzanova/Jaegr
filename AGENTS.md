@@ -15,7 +15,7 @@ Never collapse these two distinct security metrics into a single ambiguous score
 ### Architectural Boundaries
 
 - `src/domain/`: Pure business logic, authorization invariants, schemas, and types. Zero external framework/HTTP dependencies.
-- `src/server/`: Server-side services, LLM adapters (Gemini SDK), Solana instruction builders/inspectors, persistence, and test orchestration.
+- `src/server/`: Server-side services, LLM adapters (Groq via plain `fetch`, Gemini via official SDK), Solana instruction builders/inspectors, persistence, and test orchestration.
 - `src/app/api/`: Thin Next.js Route Handlers. Strictly validate input, delegate to orchestrator/domain services, return structured JSON.
 - `src/features/` & `src/components/`: React client/server components. Never run security policy evaluation or transaction decoding directly inside UI components.
 
@@ -37,8 +37,10 @@ Never collapse these two distinct security metrics into a single ambiguous score
 
 ## 4. LLM & Deterministic Fallback Invariants
 
-- Keep Gemini API keys strictly server-side. Never expose keys or prefixes in client bundles or public APIs.
+- Keep Groq and Gemini API keys strictly server-side. Never expose keys or prefixes in client bundles or public APIs.
 - The system must remain fully functional in **Deterministic Demo Mode** when no API key is supplied.
+- Provider fallback to Deterministic Demo Mode is allowed **only** when the requested provider has no API key. A live-call failure must propagate as a typed `AgentProviderError` (HTTP 502 with `provider`, `model`, `scenarioId`, `retryable`) and must never be silently replaced by fixtures.
+- Groq and Gemini share the same system instruction and ActionProposal contract (`src/server/agents/prompt.ts`) so model comparisons are prompt-identical.
 - Clearly label deterministic fixtures and mock outputs in the UI. Never fabricate or masquerade mock responses as live AI outputs.
 - An LLM must never evaluate whether its own transaction proposal is safe. The policy evaluator must remain 100% deterministic and independent.
 

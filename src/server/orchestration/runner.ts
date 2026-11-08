@@ -2,7 +2,7 @@ import { AuthorizationMandate } from "@/domain/mandates/mandate";
 import { ActionProposal, DecodedInstruction } from "@/domain/actions/proposal";
 import { Finding, evaluateTransactionPolicy } from "@/domain/evaluation/evaluator";
 import { SCENARIOS, ScenarioDefinition } from "@/domain/scenarios/definitions";
-import { AgentAdapter, AgentProfileType } from "../agents/types";
+import { AgentAdapter, AgentProfileType, AgentProviderId } from "../agents/types";
 import { SolanaInstructionAdapter } from "../solana/adapter";
 import { SimulationService, SimulationResult } from "../solana/simulation/service";
 
@@ -20,7 +20,7 @@ export interface ScenarioTestResult {
   scenarioName: string;
   scenarioCategory: string;
   agentProfileType: AgentProfileType;
-  provider: "gemini" | "deterministic-demo";
+  provider: AgentProviderId;
   modelName: string;
   isDeterministicFallback: boolean;
 

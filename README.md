@@ -5,7 +5,7 @@
 [![Track](https://img.shields.io/badge/Track-Solana%20AI-9945FF?style=flat-square)](https://solana.com)
 [![Solana SDK](https://img.shields.io/badge/@solana/kit-8.6.0-14F195?style=flat-square)](https://github.com/solana-labs/solana-web3.js)
 [![Framework](https://img.shields.io/badge/Next.js-16%20App%20Router-black?style=flat-square)](https://nextjs.org)
-[![Engine](https://img.shields.io/badge/Gemini-3.6%20Flash-4285F4?style=flat-square)](https://ai.google.dev)
+[![Engine](https://img.shields.io/badge/Live%20LLM-Groq%20%7C%20Gemini-8B5CF6?style=flat-square)](https://console.groq.com)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square)](LICENSE)
 
 ---
@@ -43,7 +43,7 @@ A transaction may **simulate successfully** while being **policy-BLOCKED** (a bl
                      ▼
        ┌───────────────────────────┐
        │     Reference AI Agent    │ ───► METRIC 1: Agent Resistance
-       │ (Gemini 3.6 / Sim Adapter)│      (RESISTED vs COMPROMISED)
+       │  (Groq/Gemini/Sim Adapter) │      (RESISTED vs COMPROMISED)
        └───────────────────────────┘
                      │ (Proposed Action JSON)
                      ▼
@@ -85,7 +85,7 @@ A transaction may **simulate successfully** while being **policy-BLOCKED** (a bl
 - **Five Mandatory Adversarial Scenarios:** Prompt injection, spend limit escalation, recipient substitution, unauthorized DeFi program calls, and transaction replay.
 - **Side-by-Side Agent Profiles:** Compare **Naive DeFi Assistant (Vulnerable)** against **Hardened Solana Sentinel (Hardened)** side by side.
 - **Deterministic Offline Demo Mode:** Fully functional with zero API keys or external network connectivity.
-- **Google Gemini 3.6 Flash Integration:** Live AI testing using structured JSON output schemas (server-side only).
+- **Groq + Gemini Integration:** Live AI testing with structured JSON output schemas (server-side only). Groq is the default live provider (per-minute free-tier limits); Gemini 3.6 Flash remains available as a secondary option.
 - **Embedded SQLite Audit History:** All test runs and simulation results persisted via Drizzle ORM.
 
 ---
@@ -137,7 +137,7 @@ pnpm install
 ### Environment Setup
 ```bash
 cp .env.example .env
-# Edit .env with your values (Gemini API key is optional)
+# Edit .env with your values (Groq/Gemini API keys are optional)
 ```
 
 **Required variables:**
@@ -151,7 +151,13 @@ SOLANA_DEVNET_RPC_URL=https://api.devnet.solana.com
 # Optional: server-side RPC timeout in milliseconds (default: 8000)
 SOLANA_RPC_TIMEOUT_MS=8000
 
-# Optional: Gemini API key for live AI agent testing
+# Optional: Groq API key for live AI agent testing (recommended)
+GROQ_API_KEY=your_key_here
+
+# Optional: Groq model override (default: openai/gpt-oss-120b)
+GROQ_MODEL=openai/gpt-oss-120b
+
+# Optional: Gemini API key (secondary live provider; free tier 20 req/day)
 GEMINI_API_KEY=your_key_here
 
 # Optional: Gemini model override (default: gemini-3.6-flash)
@@ -246,7 +252,7 @@ This repository's automated tests do **not** execute a real transaction. Live ex
 - **Unsigned Proposals Only:** Transactions evaluated in the workbench are never signed automatically.
 - **Devnet-only transaction operations:** Preparation, simulation, signing, submission, and confirmation are rejected server-side unless the configured cluster is `devnet`. Read-only network access follows the configured cluster, and the UI always displays it.
 - **No Floating-Point Math:** All SOL comparisons use exact integer Lamports (`bigint`).
-- **Server-Side API Keys:** Gemini API key and RPC URLs with credentials remain strictly server-side.
+- **Server-Side API Keys:** Groq/Gemini API keys and RPC URLs with credentials remain strictly server-side.
 - **Zero-Trust Policy:** The independent policy evaluator never trusts natural-language explanations from an LLM.
 - **Explicit Signing:** Any wallet transaction signature must be initiated by an explicit user action — wallet connection never auto-signs.
 - **Signed execution is a two-phase flow:** `/api/solana/prepare` returns an unsigned transaction only after server-side inspection, authorization, and simulation. The Workbench then requests `solana:signTransaction` from a connected Devnet wallet only after the user clicks **Sign & Submit**.
