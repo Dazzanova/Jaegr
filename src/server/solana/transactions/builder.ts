@@ -68,6 +68,66 @@ export function buildTransactionForSimulation(
   }
 }
 
+/**
+ * Builds the executable transaction using the connected wallet as the signer
+ * and fee payer. The proposal is still inspected independently before this step.
+ */
+export function buildTransactionForExecution(
+  decoded: DecodedInstruction,
+  blockhashInfo: BlockhashInfo,
+  feePayer: string
+): string | null {
+  try {
+    if (decoded.instructionType === "SYSTEM_TRANSFER") {
+      if (!decoded.recipient || decoded.lamports === undefined) return null;
+      const feePayerAddr = address(feePayer);
+      const ix = getTransferSolInstruction({
+        source: createNoopSigner(feePayerAddr),
+        destination: address(decoded.recipient),
+        amount: lamports(decoded.lamports)
+      });
+      const txMessage = pipe(
+        createTransactionMessage({ version: 0 }),
+        tx => setTransactionMessageFeePayer(feePayerAddr, tx),
+        tx => setTransactionMessageLifetimeUsingBlockhash(blockhashInfo, tx),
+        tx => appendTransactionMessageInstruction(ix, tx)
+      );
+      return getBase64EncodedWireTransaction(compileTransaction(txMessage));
+    }
+
+    if (
+      decoded.instructionType === "TOKEN_TRANSFER_CHECKED" &&
+      decoded.recipient &&
+      decoded.tokenMint &&
+      decoded.authority &&
+      decoded.tokenAmount !== undefined &&
+      decoded.tokenDecimals !== undefined &&
+      decoded.authority === feePayer
+    ) {
+      const feePayerAddr = address(feePayer);
+      const ix = getTransferCheckedInstruction({
+        source: address(decoded.source || feePayer),
+        mint: address(decoded.tokenMint),
+        destination: address(decoded.recipient),
+        authority: createNoopSigner(feePayerAddr),
+        amount: decoded.tokenAmount,
+        decimals: decoded.tokenDecimals
+      });
+      const txMessage = pipe(
+        createTransactionMessage({ version: 0 }),
+        tx => setTransactionMessageFeePayer(feePayerAddr, tx),
+        tx => setTransactionMessageLifetimeUsingBlockhash(blockhashInfo, tx),
+        tx => appendTransactionMessageInstruction(ix, tx)
+      );
+      return getBase64EncodedWireTransaction(compileTransaction(txMessage));
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function buildSystemTransfer(
   decoded: DecodedInstruction,
   blockhashInfo: BlockhashInfo,

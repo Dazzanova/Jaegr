@@ -3,6 +3,7 @@ import { z } from "zod";
 import { actionProposalSchema } from "@/domain/actions/proposal";
 import { SolanaInstructionAdapter } from "@/server/solana/adapter";
 import { SimulationService } from "@/server/solana/simulation/service";
+import { isDevnetConfigured } from "@/server/solana/config";
 
 const requestBodySchema = z.object({
   proposal: actionProposalSchema,
@@ -20,6 +21,13 @@ const requestBodySchema = z.object({
  * A simulation EXECUTION_FAILED does not mean the transaction is unauthorized.
  */
 export async function POST(req: NextRequest) {
+  if (!isDevnetConfigured()) {
+    return NextResponse.json(
+      { error: "Devnet only: transaction simulation is disabled" },
+      { status: 403 }
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();

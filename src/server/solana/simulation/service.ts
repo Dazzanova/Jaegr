@@ -17,6 +17,7 @@
  */
 
 import { getSolanaClient } from "../client";
+import { isDevnetConfigured } from "../config";
 import { buildTransactionForSimulation } from "../transactions/builder";
 import { DecodedInstruction } from "@/domain/actions/proposal";
 
@@ -61,6 +62,16 @@ export class SimulationService {
   ): Promise<SimulationResult> {
     const timestamp = new Date().toISOString();
     const start = performance.now();
+
+    // ── Guard: Devnet-only ───────────────────────────────────────────────────
+    if (!isDevnetConfigured()) {
+      return {
+        status: "NOT_RUN",
+        timestamp,
+        durationMs: 0,
+        errorMessage: "Simulation not run: the application is not configured for Solana Devnet"
+      };
+    }
 
     // ── Guard: skip unsimulatable instruction types ───────────────────────────
     if (decoded.instructionType === "MALFORMED") {
@@ -118,7 +129,6 @@ export class SimulationService {
       if (simResult.err) {
         return {
           status: "EXECUTION_FAILED",
-          slot: simResult.unitsConsumed?.toString(),
           unitsConsumed: simResult.unitsConsumed?.toString(),
           logs: simResult.logs ?? [],
           err: simResult.err,
