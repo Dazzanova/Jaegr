@@ -76,7 +76,11 @@ A transaction may **simulate successfully** while being **policy-BLOCKED** (a bl
 - **Supported Instructions:**
   - ✅ System Program SOL transfers (`sol_transfer`)
   - ✅ SPL Token `transferChecked` (`token_transfer`)
-  - 🚫 All other programs → explicit `UNSUPPORTED_INSTRUCTION`
+  - ✅ SPL Token unchecked `transfer` — decoded from wire bytes and inspected (execution requires the wallet authority)
+  - 🚫 Associated Token Account creation, Anchor/CPI, and arbitrary programs → explicit `UNSUPPORTED_INSTRUCTION`
+  - 🚫 Versioned transactions using address lookup tables → rejected explicitly (accounts cannot be fully inspected)
+- **Wire-Level Re-Inspection:** Prepared and signed transactions are decoded from their actual compiled bytes with `@solana/kit`. Recipient, source account, token authority, amount, program, instruction count, and account privileges must match the independently inspected proposal before any submission. A SOL transfer must spend from the connected fee payer.
+- **Cumulative Authorization:** Multi-instruction proposals are decoded as a bundle and evaluated cumulatively, so two individually-small transfers cannot exceed the mandate together.
 - **Devnet Transaction Simulation:** Builds Kit v8 wire transactions and calls `simulateTransaction` with `replaceRecentBlockhash: true, sigVerify: false`. Captures logs, compute units, and execution errors.
 - **Five Mandatory Adversarial Scenarios:** Prompt injection, spend limit escalation, recipient substitution, unauthorized DeFi program calls, and transaction replay.
 - **Side-by-Side Agent Profiles:** Compare **Naive DeFi Assistant (Vulnerable)** against **Hardened Solana Sentinel (Hardened)** side by side.
@@ -109,7 +113,8 @@ A transaction may **simulate successfully** while being **policy-BLOCKED** (a bl
 - **Runtime Validation:** Zod (v4.6.7)
 - **Database & ORM:** SQLite (`better-sqlite3` v13) with `drizzle-orm` (v0.45.4)
 - **Styling:** Tailwind CSS v4 & Lucide Icons
-- **Unit & Integration Testing:** Vitest (v5.1.0) — 54 tests
+- **Unit & Integration Testing:** Vitest (v5.1.0) — 113 deterministic tests
+- **Live Devnet Smoke Testing:** Opt-in Vitest suite (`pnpm test:devnet`), never part of default CI
 - **E2E Smoke Testing:** Playwright (v1.65.0)
 
 ---
@@ -143,6 +148,9 @@ NEXT_PUBLIC_SOLANA_CLUSTER=devnet
 # Optional: custom RPC endpoint (improves reliability vs public endpoint)
 SOLANA_DEVNET_RPC_URL=https://api.devnet.solana.com
 
+# Optional: server-side RPC timeout in milliseconds (default: 8000)
+SOLANA_RPC_TIMEOUT_MS=8000
+
 # Optional: Gemini API key for live AI agent testing
 GEMINI_API_KEY=your_key_here
 ```
@@ -156,8 +164,10 @@ GEMINI_API_KEY=your_key_here
 ### Run
 ```bash
 pnpm dev        # Start dev server at http://localhost:3000
-pnpm test       # Run 54 unit + integration tests
+pnpm test       # Run deterministic unit + integration tests (CI-safe, no live RPC)
+pnpm test:devnet # Opt-in live Devnet smoke tests (real RPC, never signs/submits)
 pnpm typecheck  # TypeScript strict check
+pnpm lint       # ESLint
 pnpm build      # Production build
 pnpm test:e2e   # Playwright E2E smoke test
 ```
@@ -184,6 +194,31 @@ The simulation tab in each result card shows:
 
 Simulation is completely independent from authorization. A simulation SUCCESS never means a transaction is authorized.
 
+### Explicit wallet-signed execution lifecycle
+
+Execution is a separate, opt-in lifecycle. Nothing is signed or submitted until the user explicitly clicks **Sign & Submit**.
+
+1. Select a policy-evaluated proposal in **Devnet Transaction Execution**.
+2. Click **Prepare & Simulate**. The server re-inspects the instruction, authorizes it, builds the exact unsigned wire transaction, decodes those wire bytes again, verifies they match the inspected instruction, and simulates them on Devnet.
+3. Review the fee payer, program, recipient, amount, account privileges, authorization result, simulation status/logs, compute units, and blockhash validity in the UI.
+4. The **Sign & Submit to Devnet** button is enabled only when the wallet is connected to `solana:devnet`, authorization passes, the exact simulation succeeds, and the selected proposal/mandate/wallet have not changed.
+5. The wallet's `solana:signTransaction` feature signs the exact prepared message. Closing or rejecting the wallet prompt aborts execution.
+6. The server decodes the signed wire transaction, requires the expected fee payer, compares its message bytes with the prepared transaction, re-decodes the instructions, and re-runs the deterministic evaluator against the actual wire instruction before submission.
+7. The server simulates the exact signed transaction with signature verification enabled, then submits it and polls for confirmation at `confirmed` commitment.
+8. Execution evidence (signature, slot, status, errors) is persisted in SQLite keyed by `actionId`. Confirmed actions are idempotent; unresolved actions are never retried automatically.
+
+Failure states are explicit: `SUBMITTED`, `CONFIRMED`, `FAILED`, `UNKNOWN`. A confirmation timeout or ambiguous `sendTransaction` error is reported as `UNKNOWN` and must be inspected by signature before any retry. If the blockhash expired before confirmation, the UI says so rather than claiming success.
+
+### Manual Devnet verification
+
+1. Ensure the wallet is on Devnet and funded (`solana airdrop 1 <ADDRESS> --url devnet` or the faucet).
+2. Run a scenario, select a `PASSED` proposal, click **Prepare & Simulate**, then **Sign & Submit to Devnet**.
+3. Approve the transaction in the wallet.
+4. Copy the returned signature or open the **Verify on Solana Explorer (Devnet)** link.
+5. Confirm the transaction exists on Devnet with the expected recipient and amount.
+
+This repository's automated tests do **not** execute a real transaction. Live execution requires your explicit manual approval and is not claimed as verified unless you perform the steps above.
+
 ### Supported API Endpoints
 
 | Method | Path | Description |
@@ -192,6 +227,8 @@ Simulation is completely independent from authorization. A simulation SUCCESS ne
 | `GET` | `/api/solana/balance?address=<pk>` | SOL balance in lamports |
 | `GET` | `/api/solana/account?address=<pk>` | Account details |
 | `POST` | `/api/solana/simulate` | Simulate an ActionProposal against Devnet |
+| `POST` | `/api/solana/prepare` | Re-inspect, authorize, build and simulate a wallet-ready Devnet transaction |
+| `POST` | `/api/solana/execute` | Validate a wallet-signed transaction, re-authorize, submit and confirm it on Devnet |
 | `GET` | `/api/solana/transaction?signature=<sig>` | Fetch confirmed transaction |
 | `GET` | `/api/test-runs` | List audit history |
 | `POST` | `/api/test-runs` | Run a scenario test |
@@ -204,12 +241,15 @@ Simulation is completely independent from authorization. A simulation SUCCESS ne
 
 - **No Private Keys:** AgentCrashTest never requests, accepts, stores, or logs private keys or seed phrases.
 - **Unsigned Proposals Only:** Transactions evaluated in the workbench are never signed automatically.
-- **No Mainnet Broadcasting:** The app rejects any RPC calls to Mainnet.
+- **Devnet-only transaction operations:** Preparation, simulation, signing, submission, and confirmation are rejected server-side unless the configured cluster is `devnet`. Read-only network access follows the configured cluster, and the UI always displays it.
 - **No Floating-Point Math:** All SOL comparisons use exact integer Lamports (`bigint`).
 - **Server-Side API Keys:** Gemini API key and RPC URLs with credentials remain strictly server-side.
 - **Zero-Trust Policy:** The independent policy evaluator never trusts natural-language explanations from an LLM.
 - **Explicit Signing:** Any wallet transaction signature must be initiated by an explicit user action — wallet connection never auto-signs.
-- **Fail Closed:** Unknown or unsupported instructions always return `UNSUPPORTED_INSTRUCTION` and are rejected by the policy evaluator.
+- **Signed execution is a two-phase flow:** `/api/solana/prepare` returns an unsigned transaction only after server-side inspection, authorization, and simulation. The Workbench then requests `solana:signTransaction` from a connected Devnet wallet only after the user clicks **Sign & Submit**.
+- **Signed-message integrity:** `/api/solana/execute` decodes the signed wire transaction with Kit, requires the expected fee payer, compares the signed message bytes with the inspected/prepared message, re-decodes the instruction and re-runs the deterministic evaluator against it, simulates with signature verification enabled, and only then submits.
+- **Replay and uncertain outcomes:** Action IDs are persisted with pending/submitted/confirmed/failed/unknown states. Duplicate or unresolved actions are not automatically retried; unknown outcomes require signature/status inspection.
+- **Fail Closed:** Unknown, malformed, or unsupported instructions (including address-lookup-table transactions) are rejected by the policy evaluator and cannot be executed.
 
 ---
 
@@ -233,9 +273,10 @@ Simulation is completely independent from authorization. A simulation SUCCESS ne
 - [x] Devnet transaction simulation via `simulateTransaction`
 - [x] Wallet Standard browser wallet connection
 - [x] Real-time network status indicator
+- [x] Wire-level transaction decoding, signed-message integrity checks, and explicit Devnet execution
+- [x] Multi-instruction proposal decoding and cumulative authorization
+- [ ] Multi-instruction simulation/execution and CPI (Cross-Program Invocation) graph inspection
 - [ ] Anchor Program IDL dynamic decoder integration
-- [ ] Multi-instruction bundle and CPI (Cross-Program Invocation) graph inspection
-- [ ] Explicit wallet-signed Devnet transaction execution with Explorer link
 - [ ] CI/CD GitHub Action for automated pull request agent red-teaming
 
 ---

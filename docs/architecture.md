@@ -82,6 +82,41 @@ sequenceDiagram
     UI-->>User: Displays Agent Resistance & Enforcement Verdicts
 ```
 
+### Wallet-approved Devnet execution
+
+Execution is deliberately separate from the security-test run:
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI
+    participant Prepare as /api/solana/prepare
+    participant Wallet as Wallet Standard
+    participant Execute as /api/solana/execute
+    participant RPC as Devnet RPC
+    participant DB as Execution evidence
+
+    User->>UI: Select an existing PASSED proposal
+    UI->>Prepare: proposal + mandate + connected Devnet fee payer
+    Prepare->>Prepare: Decode, independently authorize, build exact wire tx
+    Prepare->>Prepare: Decode wire bytes and assert they match the inspected instruction
+    Prepare->>RPC: Simulate unsigned prepared tx
+    Prepare-->>UI: unsigned wire tx + authorization + simulation
+    User->>UI: Clicks Sign & Submit
+    UI->>Wallet: solana:signTransaction
+    Wallet-->>UI: signed wire tx
+    UI->>Execute: signed + unsigned wire tx + proposal + mandate
+    Execute->>Execute: Decode unsigned wire; re-authorize the actual instruction
+    Execute->>Execute: Decode signed wire; compare message bytes and fee payer
+    Execute->>RPC: Simulate exact signed tx with sigVerify=true
+    Execute->>RPC: sendTransaction
+    Execute->>RPC: Poll confirmed transaction/status (+ blockhash expiry check)
+    Execute->>DB: Persist signature and outcome
+    Execute-->>UI: confirmed/failed/unknown + Explorer URL
+```
+
+The browser never supplies an authoritative verdict. The server rejects non-Devnet execution, malformed or unsupported instructions, wire bytes that differ from the inspected instruction, changed message bytes, changed fee payer, failed authorization, duplicate action IDs, and automatic retries of unresolved submissions.
+
 ---
 
 ## 4. Key Domain Models & Invariants
@@ -154,6 +189,8 @@ src/
 │   ├── account/route.ts        # GET account info
 │   ├── balance/route.ts        # GET lamport balance
 │   ├── network/route.ts        # GET Devnet health & slot
+│   ├── prepare/route.ts        # POST inspect, authorize, build, self-verify, simulate
+│   ├── execute/route.ts        # POST verify signed message, re-authorize, submit, confirm
 │   ├── simulate/route.ts       # POST instruction simulation
 │   └── transaction/route.ts    # GET transaction by signature
 ├── lib/wallet/
@@ -162,13 +199,16 @@ src/
 │   ├── NetworkStatusBadge.tsx  # Live Devnet health indicator
 │   └── WalletButton.tsx        # Connect/disconnect + balance display
 └── server/solana/
-    ├── adapter.ts              # Extended: sol_transfer + token_transfer
-    ├── client.ts               # SolanaClient: RPC wrapper (server-only)
-    ├── config.ts               # Network config from env vars
+    ├── adapter.ts              # Proposal → instruction, incl. single/batch bundles
+    ├── client.ts               # SolanaClient: RPC wrapper with timeouts (server-only)
+    ├── config.ts               # Validated network config + Devnet assertions
+    ├── execution.ts            # Submission-endpoint rate limiting
     ├── simulation/
     │   └── service.ts          # SimulationService.simulate()
     └── transactions/
-        └── builder.ts          # buildTransactionForSimulation()
+        ├── builder.ts          # buildTransactionForExecution/Simulation()
+        ├── decoder.ts          # Wire-byte decoding + inspected-instruction matching
+        └── wire.ts             # Signed-message byte equality and fee-payer validation
 ```
 
 ### Simulation Flow
@@ -200,10 +240,39 @@ ScenarioTestRunner.runScenario()
 ### Key Invariants
 
 1. **Simulation is NOT security.** A simulation SUCCESS does not authorize a transaction.
-2. **Simulation is NOT required.** `skipSimulation: true` makes all tests deterministic for CI.
+2. **Simulation is NOT required for evaluation.** `skipSimulation: true` makes security tests deterministic for CI.
 3. **Simulation fails closed.** RPC errors → `RPC_ERROR`, not falsely reported as `SUCCESS`.
 4. **Wallet connection is NOT signing.** Connecting a wallet does not authorize any transaction.
-5. **No Mainnet exposure.** The `SolanaNetworkConfig.cluster` is validated before any RPC call.
+5. **No Mainnet exposure.** `config.ts` validates the cluster and every transaction operation asserts `devnet` server-side.
+6. **The wire is authoritative.** `/prepare` re-decodes its own output; `/execute` decodes the unsigned and signed wires, requires identical message bytes, and re-runs the evaluator on the wire-decoded instruction.
+7. **No fabricated outcomes.** Every RPC call has a timeout; malformed responses throw and surface as errors. `sendTransaction` returning a signature is not treated as confirmation.
+
+### Execution State Machine
+
+```
+PENDING ──simulate signed──► SUBMITTED ──getTransaction?──► CONFIRMED
+   │                            │
+   │                            ├──meta.err──► FAILED
+   │                            └──timeout───► UNKNOWN (blocked from retry)
+   └──simulation fails / RPC error──► no persisted submission (retryable)
+```
+
+- `PENDING` exists only after the server claims an `actionId`; pre-submission failures do not poison the ID.
+- `CONFIRMED` is idempotent and returns the stored signature/slot.
+- `UNKNOWN` covers ambiguous `sendTransaction` errors, signature mismatches, and confirmation timeouts. It is never retried automatically.
+- If the blockhash's `lastValidBlockHeight` has passed, the response explicitly notes expiry.
+
+### Supported / Unsupported Instructions
+
+| Program | Instruction | Decoding | Authorization | Simulation | Execution |
+|---|---|---|---|---|---|
+| System | `transferSol` | ✅ | ✅ | ✅ | ✅ when wallet is source/fee payer |
+| SPL Token | `transferChecked` | ✅ | ✅ | ✅ | ✅ when wallet is authority |
+| SPL Token | `transfer` | ✅ | ✅ | ✅ (builder supports checked proposals) | Not built from proposals |
+| Associated Token | create / createIdempotent | 🚫 UNSUPPORTED | 🚫 blocked | 🚫 NOT_RUN | 🚫 rejected |
+| Any other | — | 🚫 UNSUPPORTED | 🚫 blocked | 🚫 NOT_RUN | 🚫 rejected |
+
+Versioned transactions with address lookup tables are rejected during wire decoding because account privileges cannot be fully resolved without lookup-table contents. Batch proposals are decoded and cumulatively authorized, but batch simulation/execution is not implemented and fails closed.
 
 ### Wallet Architecture
 

@@ -44,11 +44,30 @@ AgentCrashTest establishes a security evaluation workbench to red-team agents be
 [ Security Findings & Verdict ]
 ```
 
+### Wallet execution trust boundary
+
+After an evaluated proposal is selected, the server creates a fresh Devnet transaction using the connected wallet as fee payer. The browser receives only unsigned wire bytes. A Wallet Standard `solana:signTransaction` call is made only from the explicit **Sign & Submit** action.
+
+Before returning the unsigned transaction, `/api/solana/prepare` decodes its own wire bytes and asserts that program ID, instruction type, source account, token authority, recipient, amount, token mint/decimals, and instruction count match the independently inspected proposal.
+
+On return, `/api/solana/execute`:
+
+1. decodes the submitted unsigned wire transaction and re-runs the deterministic evaluator against the **wire-decoded** instruction (never a browser verdict);
+2. requires the signed message bytes to be identical to the prepared message and the fee payer to be the connected wallet;
+3. simulates the exact signed transaction with signature verification enabled;
+4. submits only after those checks pass;
+5. polls for confirmation and persists the result.
+
+A malicious browser therefore cannot swap recipient, amount, program, extra instructions, or fee payer after inspection without failing server-side validation. A wallet rejection, unsupported signing capability, or non-Devnet wallet chain blocks the flow before submission.
+
+Execution evidence is keyed by `actionId` in SQLite. `PENDING`, `SUBMITTED`, `CONFIRMED`, `FAILED`, and `UNKNOWN` states distinguish confirmation from submission. A timeout or ambiguous `sendTransaction` error is `UNKNOWN`, not success or failure, and is never automatically retried. Concurrent duplicate submissions are rejected by the primary key; confirmed actions are idempotent.
+
 ### Trust Boundary Rules
 1. **The LLM is NOT Trusted:** The agent's reasoning, explanations, or claims of compliance are never considered by the policy evaluator.
-2. **Instruction Structure is Inspected Directly:** The evaluator inspects the actual Solana instruction structure and decoded accounts produced by `@solana/kit` and `@solana-program/system`.
+2. **Instruction Structure is Inspected Directly:** The evaluator inspects the actual Solana instruction structure and decoded accounts produced by `@solana/kit`, `@solana-program/system`, and `@solana-program/token`, including the compiled wire bytes for prepared and signed transactions.
 3. **Integer Lamports Only:** Floating-point representations of SOL amounts are strictly forbidden within the evaluation engine.
 4. **Server-Side Key Isolation:** Gemini API keys and sensitive environment variables remain strictly on the server and are never delivered to the client browser.
+5. **No Client-Authoritative Verdicts:** `authorized`, `simulation`, `signature`, and similar browser-supplied values are never trusted. The server derives every verdict itself.
 
 ---
 
@@ -103,6 +122,6 @@ AgentCrashTest establishes a security evaluation workbench to red-team agents be
 ## 6. Explicit Non-Goals & Limitations
 
 - **AgentCrashTest does NOT eliminate prompt injection:** Prompt injection remains an open problem in foundation models. The tool assesses resistance, but defense-in-depth relies on the independent policy evaluator.
-- **No Mainnet Broadcasting:** AgentCrashTest generates and inspects unsigned instruction proposals. It does not sign or broadcast real on-chain transactions.
+- **Devnet-only broadcasting:** Phase G permits explicit wallet-signed submission only to Devnet; the server rejects preparation and execution for every other cluster.
 - **No Private Key Handling:** AgentCrashTest will never request, store, or manage private keys or mnemonic seed phrases.
 - **Simulation Scope:** MVP focuses on System Program SOL transfers and explicit program ID verification. Complex multi-instruction Anchor CPI chains are reserved for the future roadmap.

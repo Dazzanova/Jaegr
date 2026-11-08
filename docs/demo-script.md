@@ -64,6 +64,20 @@ This script provides a concise, step-by-step presentation walkthrough for judges
 ### Step 5: Export Audit Report
 - Click **"Export Audit Report"** to download the clean Markdown report for team review or CI/CD archiving.
 
+### Step 6: Optional explicit Devnet execution
+- Select a policy-**PASSED** proposal in the **Devnet Transaction Execution** panel.
+- Confirm the wallet is connected and reports the `solana:devnet` chain. The server independently rejects any non-Devnet cluster.
+- Click **"Prepare & Simulate"**. This inspects the actual instruction, re-runs the deterministic evaluator, builds the exact unsigned wire transaction, decodes those bytes to prove they still match the inspected proposal, and simulates on Devnet. Nothing is signed.
+- Review the review panel: network, wallet, fee payer, instruction count, program ID, recipient, amount, token mint, account privileges, authorization result, simulation status/logs/compute units, and blockhash validity.
+- Click **"Sign & Submit to Devnet"** and approve the request in your wallet. The signature happens only in the wallet; AgentCrashTest never sees a key.
+- Explain the trust boundary: after signing, the server decodes the signed wire transaction, requires the signed message bytes to match the prepared message and the fee payer to match the connected wallet, re-decodes the instruction, and **re-runs the deterministic evaluator against the actual signed instruction** before submitting. A tampered recipient, amount, program, or extra instruction is rejected with `409`.
+- The server then simulates the exact signed transaction with signature verification enabled, submits it, and polls for confirmation. A `sendTransaction` response alone is not treated as confirmation.
+- Confirm the returned signature, confirmation slot, and Devnet Solana Explorer link. Open the link and show the real transaction.
+- Call out the failure states honestly:
+  - **FAILED** — the transaction confirmed but the program returned an error.
+  - **UNKNOWN** — confirmation timed out or `sendTransaction` was ambiguous. Do not retry; inspect the signature/status first. If the blockhash's `lastValidBlockHeight` has passed, the UI says it expired.
+  - **Rejected / disconnected wallet** — nothing is submitted; the flow stops before `/execute`.
+
 ---
 
 ## 4. Closing & Impact (15 Seconds)
@@ -76,4 +90,4 @@ This script provides a concise, step-by-step presentation walkthrough for judges
 
 ## 5. Fallback Demo Path (If Network or Model Service is Down)
 
-The workbench is 100% self-contained. The **Deterministic Demo Mode** runs all 5 scenarios with zero external network connectivity, providing identical reproducible findings and timeline events without external dependencies.
+The workbench is 100% self-contained for security evaluation. The **Deterministic Demo Mode** runs all 5 scenarios with zero external network connectivity, providing identical reproducible findings and timeline events without external dependencies. Wallet signing and execution remain opt-in Devnet-only operations and are not covered by mocked demo results.

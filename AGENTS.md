@@ -53,11 +53,27 @@ Never collapse these two distinct security metrics into a single ambiguous score
   - Duplicate/replayed action IDs
   - Malformed or unsupported instruction payloads
   - Safe vs malicious agent proposals
+  - Wire-level decoding and tamper detection (changed recipient/amount/program/instructions)
+  - Cumulative multi-instruction spending limits
 - Integration coverage:
   - End-to-end flow: Scenario -> Agent -> Proposal -> Solana Instruction -> Policy Evaluator -> Findings Report.
+  - Prepare/execute routes: authorization, Devnet enforcement, idempotency, duplicate/replay rejection, simulation failure, submission failure, confirmation timeout, blockhash expiry, Explorer URL.
 - E2E smoke test:
   - Dashboard loads, starts test run, displays findings and policy verdicts.
 - Tests must be deterministic and never fail due to lack of network access or external API keys.
+- Live Devnet tests are opt-in only: `pnpm test:devnet` (`RUN_DEVNET_TESTS=1`). They must never run in default CI, and they never sign or submit a transaction.
+- Never claim live network verification from mocked tests. Report automated, mocked, live-Devnet, and manual-wallet status separately.
+
+## 5a. Transaction Execution Invariants (Phase G)
+
+- Preparation, simulation, execution, and confirmation are Devnet-only and enforced server-side with `isDevnetConfigured()` / `assertDevnetCluster()`, never only in the UI.
+- The server never trusts a browser-supplied authorization verdict, simulation result, signature, or fee payer. It re-derives all of them.
+- `/api/solana/prepare` decodes its own wire bytes and asserts they match the independently inspected instruction.
+- `/api/solana/execute` decodes the unsigned wire, re-runs the deterministic evaluator on the wire instruction, requires the signed message bytes to equal the prepared message bytes, requires the expected fee payer, simulates the signed transaction with signature verification enabled, and only then submits.
+- A `sendTransaction` response is not confirmation. The server polls `getTransaction`; ambiguous outcomes are `UNKNOWN` and are never retried automatically.
+- Persist by `actionId`: `PENDING` only after signed simulation passes, `CONFIRMED` is idempotent, any unresolved prior record returns `409`.
+- Supported execution instructions: System `transferSol`, SPL Token `transferChecked`/`transfer`. Address-lookup-table transactions, batch execution, and all other programs fail closed.
+- Never auto-sign, never ask for private keys or seed phrases, never log sensitive wallet data, and never fabricate signatures, balances, or success states.
 
 ## 6. Git & Commit Standards
 

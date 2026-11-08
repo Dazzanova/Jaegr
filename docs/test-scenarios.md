@@ -138,3 +138,72 @@ This document details the 5 mandatory adversarial scenarios implemented in Agent
   - *Policy Enforcement:* Policy blocks proposal with `DUPLICATE_ACTION_ID`.
 - **Remediation:**
   - *Architecture:* Store every processed action ID atomically in SQLite / database before signing.
+
+---
+
+## Phase G — Wallet-Signed Devnet Execution Test Matrix
+
+These tests exercise the prepare → inspect → authorize → simulate → wallet sign → server re-validate → submit → confirm → persist → Explorer lifecycle. All default tests use mocked RPC and mocked wallet bytes; none reach the network.
+
+### Automated deterministic tests (`pnpm test`)
+
+| Requirement | Test file | Result |
+|---|---|---|
+| Wire decoder reads System transfer from real bytes | `tests/unit/wire-decoder.test.ts` | ✅ |
+| Wire decoder reads token `transferChecked` / `transfer` | `tests/unit/wire-decoder.test.ts` | ✅ |
+| Unknown program fails closed as `UNSUPPORTED` | `tests/unit/wire-decoder.test.ts` | ✅ |
+| Malformed wire bytes are rejected | `tests/unit/wire-decoder.test.ts` | ✅ |
+| Wire matches inspected instruction | `tests/unit/wire-decoder.test.ts` | ✅ |
+| Changed amount rejected | `tests/unit/wire-decoder.test.ts` | ✅ |
+| Changed recipient rejected | `tests/unit/wire-decoder.test.ts` | ✅ |
+| Changed source or token authority rejected | `tests/unit/wire-decoder.test.ts` | ✅ |
+| Extra instruction rejected | `tests/unit/wire-decoder.test.ts` | ✅ |
+| Signed message accepted when identical | `tests/unit/transaction-wire.test.ts` | ✅ |
+| Modified signed message rejected | `tests/unit/transaction-wire.test.ts` | ✅ |
+| Unsigned wallet response rejected | `tests/unit/transaction-wire.test.ts` | ✅ |
+| Cumulative cap boundary (== cap allowed) | `tests/unit/evaluator-cumulative.test.ts` | ✅ |
+| Cumulative overrun blocked | `tests/unit/evaluator-cumulative.test.ts` | ✅ |
+| One lamport over cumulative cap blocked | `tests/unit/evaluator-cumulative.test.ts` | ✅ |
+| Disallowed recipient/program anywhere in batch blocked | `tests/unit/evaluator-cumulative.test.ts` | ✅ |
+| Batch replay blocked | `tests/unit/evaluator-cumulative.test.ts` | ✅ |
+| Prepare refuses unauthorized without RPC | `tests/integration/prepare-route.test.ts` | ✅ |
+| Prepare is Devnet-only server-side | `tests/integration/prepare-route.test.ts` | ✅ |
+| Prepare builds wire that decodes to inspected instruction | `tests/integration/prepare-route.test.ts` | ✅ |
+| Prepare reports simulation `RPC_ERROR` honestly | `tests/integration/prepare-route.test.ts` | ✅ |
+| Prepare reports blockhash RPC failure | `tests/integration/prepare-route.test.ts` | ✅ |
+| Execute rejects unauthorized without RPC | `tests/integration/execute-route.test.ts` | ✅ |
+| Execute rejects unsupported instruction | `tests/integration/execute-route.test.ts` | ✅ |
+| Execute rejects changed amount / recipient | `tests/integration/execute-route.test.ts` | ✅ |
+| Execute rejects modified signed message | `tests/integration/execute-route.test.ts` | ✅ |
+| Execute rejects wrong fee payer | `tests/integration/execute-route.test.ts` | ✅ |
+| Confirmed action is idempotent | `tests/integration/execute-route.test.ts` | ✅ |
+| Unresolved action cannot be resubmitted | `tests/integration/execute-route.test.ts` | ✅ |
+| Failed signed simulation never submits | `tests/integration/execute-route.test.ts` | ✅ |
+| Successful submit + confirm + Explorer URL | `tests/integration/execute-route.test.ts` | ✅ |
+| On-chain execution failure reported `FAILED` | `tests/integration/execute-route.test.ts` | ✅ |
+| Confirmation timeout → `UNKNOWN`, no retry | `tests/integration/execute-route.test.ts` | ✅ |
+| Blockhash expiry detected on timeout | `tests/integration/execute-route.test.ts` | ✅ |
+| `sendTransaction` error → `UNKNOWN`, single attempt | `tests/integration/execute-route.test.ts` | ✅ |
+| Unexpected RPC signature rejected | `tests/integration/execute-route.test.ts` | ✅ |
+| Execute is Devnet-only server-side | `tests/integration/execute-route.test.ts` | ✅ |
+| Simulate is Devnet-only and fails closed | `tests/integration/simulate-route.test.ts` | ✅ |
+
+**Totals:** 12 test files, 113 tests passing. `pnpm typecheck`, `pnpm lint`, and `pnpm build` are clean.
+
+Wallet rejection and wallet disconnect are handled in the UI (`WorkbenchView.tsx`): a rejected `solana:signTransaction` prompt aborts before any request to `/execute`, and a disconnected wallet disables both **Prepare & Simulate** and **Sign & Submit**. These paths are verified by inspection and manual testing rather than by a headless wallet mock.
+
+### Opt-in live Devnet smoke tests (`pnpm test:devnet`)
+
+`tests/devnet/devnet.integration.test.ts` performs real RPC calls only. It never signs or submits:
+
+- Devnet configuration is asserted.
+- Real network health and current slot.
+- Real recent blockhash.
+- Real account info for the System Program.
+- Real Devnet simulation of an unsigned instruction (status must be a genuine `SUCCESS`, `EXECUTION_FAILED`, or `RPC_ERROR`).
+
+**Status: not run.** Running this suite requires network access and is not claimed as verified.
+
+### Manual wallet verification
+
+**Status: not performed.** No real transaction has been signed, submitted, or confirmed. See the manual steps in `README.md` and `docs/demo-script.md`.
