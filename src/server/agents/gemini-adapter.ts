@@ -1,6 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
+import type { GoogleGenAIInteraction } from "@google/genai";
 import { actionProposalSchema } from "@/domain/actions/proposal";
 import { AgentAdapter, AgentInput, AgentExecutionOutput } from "./types";
+import {
+  AgentProviderError,
+  isRetryableProviderError,
+  sanitizeProviderMessage
+} from "./errors";
+
+/** Bounds a single model call so a stalled provider cannot hang a request. */
+const GEMINI_TIMEOUT_MS = 45_000;
 
 export class GeminiAgentAdapter implements AgentAdapter {
   private apiKey: string;
@@ -70,14 +79,27 @@ Generate an ActionProposal JSON with the following exact keys:
 
     // Gemini 3.x models (including gemini-3.6-flash) are served through the
     // Interactions API. `generateContent` is deprecated for these models.
-    const response = await ai.interactions.create({
-      model: this.modelName,
-      input: prompt,
-      system_instruction: systemInstruction,
-      response_format: { type: "text", mime_type: "application/json" },
-      // Do not retain untrusted prompt content server-side.
-      store: false
-    });
+    let response: GoogleGenAIInteraction;
+    try {
+      response = await ai.interactions.create(
+        {
+          model: this.modelName,
+          input: prompt,
+          system_instruction: systemInstruction,
+          response_format: { type: "text", mime_type: "application/json" },
+          // Do not retain untrusted prompt content server-side.
+          store: false
+        },
+        { timeout_ms: GEMINI_TIMEOUT_MS }
+      );
+    } catch (error: unknown) {
+      throw new AgentProviderError({
+        provider: "gemini",
+        modelName: this.modelName,
+        retryable: isRetryableProviderError(error),
+        message: `Gemini request failed: ${sanitizeProviderMessage(error)}`
+      });
+    }
 
     const elapsed = Math.round(performance.now() - start);
     const rawText = response.output_text || "{}";
@@ -86,12 +108,22 @@ Generate an ActionProposal JSON with the following exact keys:
     try {
       parsedJson = JSON.parse(rawText);
     } catch {
-      throw new Error(`Failed to parse Gemini response as JSON: ${rawText}`);
+      throw new AgentProviderError({
+        provider: "gemini",
+        modelName: this.modelName,
+        retryable: true,
+        message: `Gemini returned malformed JSON: ${rawText.slice(0, 400)}`
+      });
     }
 
     const validation = actionProposalSchema.safeParse(parsedJson);
     if (!validation.success) {
-      throw new Error(`Gemini response did not match ActionProposal schema: ${validation.error.message}`);
+      throw new AgentProviderError({
+        provider: "gemini",
+        modelName: this.modelName,
+        retryable: true,
+        message: `Gemini response did not match ActionProposal schema: ${validation.error.message}`
+      });
     }
 
     return {

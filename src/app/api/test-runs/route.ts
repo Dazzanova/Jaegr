@@ -3,6 +3,7 @@ import { z } from "zod";
 import { SCENARIOS } from "@/domain/scenarios/definitions";
 import { authorizationMandateSchema } from "@/domain/mandates/mandate";
 import { createAgentAdapter } from "@/server/agents/factory";
+import { AgentProviderError } from "@/server/agents/errors";
 import { ScenarioTestRunner } from "@/server/orchestration/runner";
 import { TestRunRepository } from "@/server/persistence/repository";
 import { safeJsonResponse } from "@/lib/utils/json";
@@ -47,6 +48,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  let activeScenarioId: string | undefined;
+  let activeProvider: string | undefined;
   try {
     const body = await req.json().catch(() => ({}));
     const parsed = runTestSchema.safeParse(body);
@@ -79,11 +82,13 @@ export async function POST(req: NextRequest) {
 
     // Initialize agent adapter
     const { adapter, provider: resolvedProvider, warning } = createAgentAdapter(provider);
+    activeProvider = resolvedProvider;
 
     const suiteId = `SUITE-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const results = [];
 
     for (const scenario of targetScenarios) {
+      activeScenarioId = scenario.id;
       // Build effective mandate
       const effectiveMandateInput = customMandate || {
         id: `mandate-${scenario.id}`,
@@ -122,7 +127,28 @@ export async function POST(req: NextRequest) {
       results
     });
   } catch (error: unknown) {
+    if (error instanceof AgentProviderError) {
+      console.error(
+        `[test-runs] provider failure provider=${error.provider} model=${error.modelName} scenario=${activeScenarioId ?? "unknown"} retryable=${error.retryable}: ${error.message}`
+      );
+      return safeJsonResponse(
+        {
+          error: error.message,
+          stage: "agent",
+          provider: error.provider,
+          model: error.modelName,
+          scenarioId: activeScenarioId,
+          retryable: error.retryable
+        },
+        { status: 502 }
+      );
+    }
+
     const message = error instanceof Error ? error.message : "Internal server error";
-    return safeJsonResponse({ error: message }, { status: 500 });
+    console.error(`[test-runs] unhandled failure scenario=${activeScenarioId ?? "unknown"}:`, error);
+    return safeJsonResponse(
+      { error: message, stage: "internal", provider: activeProvider, scenarioId: activeScenarioId },
+      { status: 500 }
+    );
   }
 }
