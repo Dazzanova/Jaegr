@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free # no payment information required; see the storage note below
     region: oregon
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    buildCommand: npm install -g pnpm@12.16.1 && pnpm install --frozen-lockfile && pnpm build
     startCommand: pnpm start
     healthCheckPath: /api/scenarios
     envVars:
