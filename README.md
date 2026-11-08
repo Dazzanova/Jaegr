@@ -221,18 +221,23 @@ pnpm build        # production build
 
 ### Deploy on Render
 
-`render.yaml` defines a Node web service with a 1 GB persistent disk mounted at
-`/data`, so the SQLite database survives restarts and deploys.
+`render.yaml` defines a free Node web service. No payment information is
+required.
 
 1. Push this repository to GitHub (already the case).
 2. In Render, choose **New → Blueprint**, select the repository, and apply.
 3. Set `GROQ_API_KEY` and/or `GEMINI_API_KEY` in the service's **Environment**
    tab, then let the first deploy finish.
 
-The blueprint sets `DATABASE_PATH=/data/jaegr.db`, `NEXT_PUBLIC_SOLANA_CLUSTER`,
-`SOLANA_DEVNET_RPC_URL` and a health check on `/api/scenarios`. A persistent
-disk requires a paid instance type; on a free instance, SQLite cannot persist
-between deploys.
+The blueprint sets `DATABASE_PATH=/tmp/jaegr.db`, `NEXT_PUBLIC_SOLANA_CLUSTER`,
+`SOLANA_DEVNET_RPC_URL` and a health check on `/api/scenarios`. Free instances
+have no persistent disk, so `/tmp` is writable but ephemeral: run history and
+execution evidence reset when the service restarts or redeploys. Attach a disk
+on a paid instance for durable storage, or migrate the repository layer to a
+hosted database.
+
+Free instances also spin down after a period of inactivity, so the first request
+after a quiet period can take under a minute to wake.
 
 Deploying to a serverless platform such as Vercel works for the UI but not for
 this storage design: the filesystem is read-only and ephemeral, so run history

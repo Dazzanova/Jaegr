@@ -2,7 +2,7 @@ services:
   - type: web
     name: jaegr
     runtime: node
-    plan: starter # a persistent disk requires a paid instance type
+    plan: free # no payment information required; see the storage note below
     region: oregon
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
     startCommand: pnpm start
@@ -14,16 +14,13 @@ services:
         value: devnet
       - key: SOLANA_DEVNET_RPC_URL
         value: https://api.devnet.solana.com
-      # SQLite lives on the mounted disk so runs, findings and execution
-      # evidence survive restarts and deploys.
+      # Free instances have no persistent disk. /tmp is writable but ephemeral:
+      # run history and execution evidence reset when the service restarts or
+      # redeploys. Attach a disk on a paid plan for durable storage.
       - key: DATABASE_PATH
-        value: /data/jaegr.db
+        value: /tmp/jaegr.db
       # Set these in the Render dashboard; never commit real keys.
       - key: GROQ_API_KEY
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-    disk:
-      name: jaegr-data
-      mountPath: /data
-      sizeGB: 1
