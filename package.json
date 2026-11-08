@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:devnet": "RUN_DEVNET_TESTS=1 vitest run --config vitest.devnet.config.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
